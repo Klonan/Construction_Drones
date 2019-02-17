@@ -1,8 +1,6 @@
-## Total Automization
+## Construction Drones
 
 --------------------------------------
 
-This mod adds units you can control in classic RTS fashion.
-They are crafted and deployed from special _Deploy machines_, and you can control them with a special selection tool.
-
-It also changes the base game combat mechanics, such as gun play, biter attacks, etc. to make the combat more fun and engaging.
+This mods adds Construction drones and some supporting things.
+They are ground based robots available from the early game, and will help contruct things quick.
