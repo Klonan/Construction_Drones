@@ -2,27 +2,15 @@ handler = require("script/event_handler")
 names = require("shared")
 util = require("script/script_util")
 
---error(serpent.block(defines.events))
-
 local libs = {
-  debug = require "script/debug",
   auto_request = require("script/auto_request"),
-  construction_done = require("script/construction_drone"),
+  construction_drone = require("script/construction_drone"),
   freeplay_interface = require("script/freeplay_interface"),
 }
 
-
-remote.add_interface("tf", {get = function(func) func(libs) end})
-remote.add_interface("debug", {dump = function() log(serpent.block(global)) end})
-
-libs.debug.libs = libs
-
 local on_event = function(event)
-  --local tick = game.tick
-  --log(tick.. " | Control on_event triggered")s
   for name, lib in pairs (libs) do
     if lib.on_event then
-      --log(tick.. " | Running on_Event for lib "..name)
       lib.on_event(event)
     end
   end
@@ -39,8 +27,6 @@ local register_events = function(libraries)
         all_events[k] = all_events[k] or {}
         all_events[k][lib_name] = handler
       end
-    else
-      --error(lib_name.." needs to have a get events function cmon lets be reasonable now ok I know its some boiler plate etc. but its alright its more efficient")
     end
   end
 
