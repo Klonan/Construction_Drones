@@ -1527,6 +1527,13 @@ local move_to_logistic_target = function(drone_data, target)
   return process_drone_command(drone_data)
 end
 
+--[[
+ 117.000 Script @__Construction_Drones__/script/construction_drone.lua:101: 5845 | Not in construction range, goodbye
+ 117.000 Script @__Construction_Drones__/script/construction_drone.lua:101: 5845 | Drone command cancelled 24 - 5845
+ 117.000 Script @__Construction_Drones__/script/construction_drone.lua:101: 5845 | Setting drone idle
+ 117.000 Script @__Construction_Drones__/script/construction_drone.lua:101: 5845 | Processing drone command | 24
+ 117.000 Script @__Construction_Drones__/script/construction_drone.lua:101: 5845 | Follow | 24]]
+
 local move_to_order_target = function(drone_data, target, range)
   if in_construction_range(drone_data.entity, target, range) then
     return true
@@ -1536,7 +1543,7 @@ local move_to_order_target = function(drone_data, target, range)
     return drone_wait(drone_data, 300)
   end
   local cell = target.logistic_cell or network.find_cell_closest_to(target.position)
-  if not cell.is_in_construction_range(target.position) then
+  if cell.owner ~= target and not cell.is_in_construction_range(target.position) then
     print("Not in construction range, goodbye")
     return cancel_drone_order(drone_data)
   end
