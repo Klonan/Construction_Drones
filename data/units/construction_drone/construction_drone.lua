@@ -106,7 +106,8 @@ local unit = {
       {filename = path.."construction_drone_12.ogg"},
       {filename = path.."construction_drone_13.ogg"}
     },
-    probability = 1 / (3 * 60)
+    probability = 1 / (8 * 60),
+    volume = 0.5
   },
   run_animation = animation,
   minable = {name = name, mining_time = 1},
@@ -228,6 +229,7 @@ end
 local simple_storage_chest_name = names.entities.simple_storage_chest
 local simple_storage_chest = util.copy(data.raw["logistic-container"]["logistic-chest-storage"])
 simple_storage_chest.name =simple_storage_chest_name
+simple_storage_chest.minable.result = simple_storage_chest_name
 simple_storage_chest.localised_name = simple_storage_chest_name
 simple_storage_chest.inventory_size = 19
 simple_storage_chest.picture =
@@ -238,6 +240,7 @@ simple_storage_chest.picture =
   height = 34,
   shift = {0.1875, 0}
 }
+simple_storage_chest.animation = nil
 
 local simple_storage_chest_item = {
   type = "item",
@@ -271,6 +274,7 @@ local simple_provider_chest_name = names.entities.simple_provider_chest
 local simple_provider_chest = util.copy(data.raw["logistic-container"]["logistic-chest-passive-provider"])
 simple_provider_chest.name = simple_provider_chest_name
 simple_provider_chest.localised_name = simple_provider_chest_name
+simple_provider_chest.minable.result = simple_provider_chest_name
 simple_provider_chest.inventory_size = 19
 simple_provider_chest.picture =
 {
@@ -280,6 +284,7 @@ simple_provider_chest.picture =
   height = 34,
   shift = {0.1875, 0}
 }
+simple_provider_chest.animation = nil
 
 local simple_provider_chest_item = {
   type = "item",
