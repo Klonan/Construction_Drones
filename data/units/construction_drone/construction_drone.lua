@@ -110,7 +110,7 @@ local unit = {
     volume = 0.5
   },
   run_animation = animation,
-  minable = {name = name, mining_time = 1},
+  minable = {result = name, mining_time = 1},
   ai_settings =
   {
     destroy_when_commands_fail = false,

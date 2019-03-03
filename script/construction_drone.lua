@@ -340,9 +340,8 @@ local transport_lines = function(entity)
 end
 
 local transfer_stack = function(destination, source_entity, stack)
-  local has = source_entity.get_item_count(stack.name)
-  if has == 0 then return 0 end
-  local wanted = stack.count
+  local wanted = math.min(stack.count, source_entity.get_item_count(stack.name))
+  if wanted == 0 then return 0 end
   local transferred = 0
   local insert = destination.insert
   local can_insert = destination.can_insert
@@ -1260,7 +1259,6 @@ local check_repair = function(entity)
 end
 
 local check_repair_lists = function()
-
   local remaining_checks = check_priority_list(data.repair_to_be_checked, data.repair_to_be_checked_again, check_repair, max_checks_per_tick)
   data.repair_check_index = check_list(data.repair_to_be_checked_again, data.repair_check_index, check_repair, remaining_checks)
 
@@ -1974,9 +1972,6 @@ local process_repair_command = function(drone_data)
 
   if target.get_health_ratio() == 1 then
     print("Target is fine... give up on healing him")
-    drone_data.target = nil
-    drone_data.repair_stack = nil
-    drone_data.dropoff = {}
     return cancel_drone_order(drone_data)
   end
 
