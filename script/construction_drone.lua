@@ -340,24 +340,32 @@ local transport_lines = function(entity)
 end
 
 local transfer_stack = function(destination, source_entity, stack)
+  --print("Want: "..stack.count)
+  --print("Have: "..source_entity.get_item_count(stack.name))
   local wanted = math.min(stack.count, source_entity.get_item_count(stack.name))
   if wanted == 0 then return 0 end
   local transferred = 0
   local insert = destination.insert
   local can_insert = destination.can_insert
   for k, inventory in pairs(inventories(source_entity)) do
-    local source_stack = inventory.find_item_stack(stack.name)
-    if source_stack and source_stack.valid and source_stack.valid_for_read and can_insert(source_stack) then
-      local inserted = insert(stack)
-      transferred = transferred + inserted
-      local remove_stack = {name = stack.name, count = inserted}
-      --count should always be greater than 0, otherwise can_insert would fail
-      inventory.remove(remove_stack)
-    end
-    if transferred >= wanted then
-      break
+    while true do
+      local source_stack = inventory.find_item_stack(stack.name)
+      if source_stack and source_stack.valid and source_stack.valid_for_read and can_insert(source_stack) then
+        local inserted = insert(stack)
+        transferred = transferred + inserted
+        local remove_stack = {name = stack.name, count = inserted}
+        --count should always be greater than 0, otherwise can_insert would fail
+        inventory.remove(remove_stack)
+      else
+        break
+      end
+      if transferred >= wanted then
+        --print("Transferred: "..transferred)
+        return transferred
+      end
     end
   end
+  --print("Transferred end: "..transferred)
   return transferred
 end
 
@@ -1966,6 +1974,7 @@ end
 local process_repair_command = function(drone_data)
   print("Processing repair command")
   local target = drone_data.target
+
   if not (target and target.valid) then
     return cancel_drone_order(drone_data)
   end
@@ -1975,12 +1984,13 @@ local process_repair_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
-  local drone = drone_data.entity
 
   if not move_to_order_target(drone_data, target, ranges.interact) then
     return
   end
 
+
+  local drone = drone_data.entity
   local drone_inventory = get_drone_inventory(drone_data)
   local stack
   for name, prototype in pairs (get_repair_items()) do
@@ -1997,8 +2007,7 @@ local process_repair_command = function(drone_data)
   local repair_speed = game.item_prototypes[stack.name].speed
   if not repair_speed then
     print("WTF, maybe some migration?")
-    drone_data.dropoff = {stack = stack}
-    return process_drone_command(drone_data)
+    return cancel_drone_order(drone_data)
   end
 
   local ticks_to_repair = random(20, 30)
@@ -2026,7 +2035,6 @@ local process_repair_command = function(drone_data)
     force = drone.force,
     duration = ticks_to_repair
   }
-
 
   return drone_wait(drone_data, ticks_to_repair)
 end
