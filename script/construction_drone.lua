@@ -732,7 +732,7 @@ local set_drone_idle = function(drone)
     end
   end
 
-  drone.speed = math.random() * drone.speed
+  drone.speed = math.random() * drone.prototype.speed
   data.drone_commands[drone.unit_number] = nil
   add_idle_drone(drone)
 
@@ -750,6 +750,7 @@ local set_drone_idle = function(drone)
       add_idle_drone(drone)
       return
     end
+    print("Set to go to logistic point")
     drone.set_command
     {
       type = defines.command.go_to_location,
@@ -1345,7 +1346,7 @@ local check_no_network_drones = function()
     index = index or next(drones)
     local drone = drones[index]
     if drone then
-      --drone.surface.create_entity{name = "flying-text", text = "!", position = drone.position}
+      drone.surface.create_entity{name = "flying-text", text = "!", position = drone.position}
       local old_index = index
       index = next(drones, index)
       drones[old_index] = nil
