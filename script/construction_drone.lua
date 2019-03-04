@@ -2457,7 +2457,9 @@ end
 process_drone_command = function(drone_data, result)
   local drone = drone_data.entity
   if not (drone and drone.valid) then
-    error("Drone entity not valid when processing its own command!\n"..serpent.block(drone_data))
+    --I guess it can happen, that another mod will kill it first? Who cares, this never happened during testing!
+    log("Drone entity not valid when processing its own command!\n"..serpent.block(drone_data))
+    return
   end
 
   local print = function(string)
