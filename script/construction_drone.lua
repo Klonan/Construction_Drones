@@ -273,6 +273,24 @@ local stack_from_product = function(product)
   return stack
 end
 
+local proxy_position = {1000000, 1000000}
+
+local get_proxy_chest = function(drone)
+  local index = drone.unit_number
+  local proxy_chest = data.proxy_chests[index]
+  if proxy_chest and proxy_chest.valid then
+    return proxy_chest
+  end
+  local new = drone.surface.create_entity
+  {
+    name = proxy_name,
+    position = proxy_position,
+    force = drone.force
+  }
+  data.proxy_chests[index] = new
+  return new
+end
+
 local get_drone_inventory = function(drone_data)
   local inventory = drone_data.inventory
   if inventory and inventory.valid then
@@ -280,13 +298,7 @@ local get_drone_inventory = function(drone_data)
     return inventory
   end
   local drone = drone_data.entity
-  local proxy_chest = data.proxy_chests[drone.unit_number] or drone.surface.create_entity
-  {
-    name = proxy_name,
-    position = {1000000, 1000000},
-    force = drone.force
-  }
-  data.proxy_chests[drone.unit_number] = proxy_chest
+  local proxy_chest = get_proxy_chest(drone)
   drone_data.inventory = proxy_chest.get_inventory(defines.inventory.chest)
   return drone_data.inventory
 end
@@ -1827,7 +1839,7 @@ local get_extra_target = function(drone_data)
   end
 end
 
-
+local revive_param = {return_item_request_proxy = true, raise_revive = true}
 local process_construct_command = function(drone_data)
   print("Processing construct command")
   local target = drone_data.target
@@ -1849,8 +1861,7 @@ local process_construct_command = function(drone_data)
 
 
   local unit_number = target.unit_number
-  --TODO Set to revive true once crash fix is release
-  local success, entity, proxy = target.revive({return_item_request_proxy = true, raise_revive = false})
+  local success, entity, proxy = target.revive(revive_param)
   if not success then
     drone_wait(drone_data, 30)
     print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
@@ -2545,6 +2556,20 @@ local on_entity_removed = function(event)
     local drone_data = data.drone_commands[unit_number]
     if drone_data then
       cancel_drone_order(drone_data, true)
+    end
+    local proxy_chest = data.proxy_chests[unit_number]
+    if proxy_chest and proxy_chest.valid then
+      print("Giving inventory buffer from proxy")
+      local buffer = event.buffer
+      if buffer and buffer.valid then
+        local inventory = proxy_chest.get_inventory(defines.inventory.chest)
+        if inventory and inventory.valid then
+          for name, count in pairs (inventory.get_contents()) do
+            buffer.insert{name = name, count = count}
+          end
+        end
+      end
+      proxy_chest.destroy()
     end
     return
   end
