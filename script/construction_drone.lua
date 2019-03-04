@@ -637,7 +637,9 @@ local get_logistic_network_surface = function(logistic_network)
 end
 
 local get_logistic_network_index = function(logistic_network)
+  if not (logistic_network.valid) then error("NOT VALID") end
   local networks = data.networks
+  --game.print(serpent.block(networks))
   local last_key = 0
   for k, network in pairs (networks) do
     if network and network.valid and network == logistic_network then
@@ -1346,7 +1348,7 @@ local check_no_network_drones = function()
     index = index or next(drones)
     local drone = drones[index]
     if drone then
-      drone.surface.create_entity{name = "flying-text", text = "!", position = drone.position}
+      --drone.surface.create_entity{name = "flying-text", text = "!", position = drone.position}
       local old_index = index
       index = next(drones, index)
       drones[old_index] = nil
@@ -1354,6 +1356,43 @@ local check_no_network_drones = function()
     end
   end
   data.drone_check_index = index
+end
+
+local revalidate_logistic_networks = function()
+
+  local surfaces = game.surfaces
+  for k, force in pairs (game.forces) do
+    local networks = force.logistic_networks
+    for surface_name, surface in pairs (surfaces) do
+      if networks[surface_name] then
+        for k, network in pairs (networks[surface_name]) do
+          --New networks will be added to the list.
+          get_logistic_network_index(network)
+        end
+      end
+    end
+  end
+
+  for index, network in pairs (data.networks) do
+    if not (network and network.valid) then
+      local idle_drones = data.idle_drones[index]
+      for unit_number, drone in pairs (idle_drones) do
+        if drone.valid then
+          data.no_network_drones[unit_number] = drone
+        end
+      end
+      data.idle_drones[index] = nil
+      data.networks[index] = nil
+    end
+  end
+
+end
+
+local check_logistic_networks_to_validate = function()
+  if data.validate_networks then
+    revalidate_logistic_networks()
+    data.validate_networks = false
+  end
 end
 
 local on_tick = function(event)
@@ -1373,6 +1412,8 @@ local on_tick = function(event)
   check_tile_deconstruction_lists()
 
   check_no_network_drones()
+
+  check_logistic_networks_to_validate()
 end
 
 local get_build_time = function(drone_data)
@@ -1808,7 +1849,8 @@ local process_construct_command = function(drone_data)
 
 
   local unit_number = target.unit_number
-  local success, entity, proxy = target.revive({return_item_request_proxy = true})
+  --TODO Set to revive true once crash fix is release
+  local success, entity, proxy = target.revive({return_item_request_proxy = true, raise_revive = false})
   if not success then
     drone_wait(drone_data, 30)
     print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
@@ -2515,6 +2557,11 @@ local on_entity_removed = function(event)
     return
   end
 
+  local logistic_network = entity.logistic_network
+  if logistic_network then
+    data.validate_networks = true
+  end
+
 end
 
 local on_marked_for_deconstruction = function(event)
@@ -2587,6 +2634,15 @@ local on_unit_not_idle = function(event)
   remove_idle_drone(unit)
 end
 
+local resetup_ghosts = function()
+  data.ghosts_to_be_checked_again = {}
+  for k, surface in pairs (game.surfaces) do
+    for k, ghost in pairs (surface.find_entities_filtered{type = "entity-ghost"}) do
+      data.ghosts_to_be_checked_again[ghost.unit_number] = ghost
+    end
+  end
+end
+
 local lib = {}
 
 local events =
@@ -2624,12 +2680,7 @@ lib.on_init = function()
   game.map_settings.steering.default.force_unit_fuzzy_goto_behavior = true
   game.map_settings.steering.moving.force_unit_fuzzy_goto_behavior = true
   global.construction_drone = global.construction_drone or data
-  data.ghosts_to_be_checked_again = {}
-  for k, surface in pairs (game.surfaces) do
-    for k, ghost in pairs (surface.find_entities_filtered{type = "entity-ghost"}) do
-      data.ghosts_to_be_checked_again[ghost.unit_number] = ghost
-    end
-  end
+  resetup_ghosts()
   register_events()
   if remote.interfaces["unit_control"] then
     --remote.call("unit_control", "register_unit_unselectable", drone_name)
@@ -2640,6 +2691,7 @@ lib.on_configuration_changed = function()
   if remote.interfaces["unit_control"] then
     --remote.call("unit_control", "register_unit_unselectable", drone_name)
   end
+  data.validate_networks = true
 end
 
 lib.get_events = function() return events end
