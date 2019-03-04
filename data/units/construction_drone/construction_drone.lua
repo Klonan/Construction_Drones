@@ -16,7 +16,7 @@ local animation =
       frame_count = 1,
       direction_count = 32,
       axially_symmetrical = false,
-      scale = 0.5,
+      scale = 0.33,
       shift = util.by_pixel(0, -14),
     },
     walk_shadow =
@@ -28,9 +28,9 @@ local animation =
       frame_count = 1,
       direction_count = 32,
       axially_symmetrical = false,
-      shift = util.by_pixel(15.5, -0.5),
+      shift = util.by_pixel(10.5, -8.5),
       draw_as_shadow = true,
-      scale = 0.5,
+      scale = 0.33,
     }
   }
 }

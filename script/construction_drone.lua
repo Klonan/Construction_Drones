@@ -11,7 +11,7 @@ drone_prototypes =
 {
   [names.units.construction_drone] =
   {
-    interact_range = 10,
+    interact_range = 6,
     follow_range = 20
   },
 }
