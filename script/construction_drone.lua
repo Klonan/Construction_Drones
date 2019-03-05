@@ -1388,12 +1388,14 @@ local revalidate_logistic_networks = function()
   for index, network in pairs (data.networks) do
     if not (network and network.valid) then
       local idle_drones = data.idle_drones[index]
-      for unit_number, drone in pairs (idle_drones) do
-        if drone.valid then
-          data.no_network_drones[unit_number] = drone
+      if idle_drones then
+        for unit_number, drone in pairs (idle_drones) do
+          if drone.valid then
+            data.no_network_drones[unit_number] = drone
+          end
         end
+        data.idle_drones[index] = nil
       end
-      data.idle_drones[index] = nil
       data.networks[index] = nil
     end
   end
