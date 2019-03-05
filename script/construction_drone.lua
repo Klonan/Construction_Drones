@@ -354,8 +354,8 @@ end
 local transfer_stack = function(destination, source_entity, stack)
   --print("Want: "..stack.count)
   --print("Have: "..source_entity.get_item_count(stack.name))
-  local wanted = math.min(stack.count, source_entity.get_item_count(stack.name))
-  if wanted == 0 then return 0 end
+  stack.count = math.min(stack.count, source_entity.get_item_count(stack.name))
+  if stack.count == 0 then return 0 end
   local transferred = 0
   local insert = destination.insert
   local can_insert = destination.can_insert
@@ -365,13 +365,12 @@ local transfer_stack = function(destination, source_entity, stack)
       if source_stack and source_stack.valid and source_stack.valid_for_read and can_insert(source_stack) then
         local inserted = insert(stack)
         transferred = transferred + inserted
-        local remove_stack = {name = stack.name, count = inserted}
         --count should always be greater than 0, otherwise can_insert would fail
-        inventory.remove(remove_stack)
+        inventory.remove(stack)
       else
         break
       end
-      if transferred >= wanted then
+      if transferred >= stack.count then
         --print("Transferred: "..transferred)
         return transferred
       end
@@ -1676,18 +1675,9 @@ local process_pickup_command = function(drone_data)
 
   print("Pickup chest in range, picking up item")
   local stack = drone_data.pickup.stack
-  local inventory
-  local type = chest.type
-  local chest_stack
-  local stack_name = stack.name
   local drone_inventory = get_drone_inventory(drone_data)
 
-  local taken = transfer_stack(drone_inventory, chest, stack)
-  if taken < stack.count then
-    print("The chest didn't have the item we want... or not enough of it")
-    drone_data.pickup.chest = nil
-    return drone_wait(drone_data, 12)
-  end
+  transfer_stack(drone_inventory, chest, stack)
 
   update_drone_sticker(drone_data)
 
