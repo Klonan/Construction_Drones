@@ -601,11 +601,14 @@ local get_point = function(prototype, entity)
   for k, network in pairs (networks) do
     --If there are the normal bots in the network, let them handle it!
     if data.allow_in_active_networks or network.available_construction_robots == 0 then
-      local select = network.select_pickup_point
-      for k, item in pairs(items) do
-        point = select({name = item.name, position = position})
-        if point then
-          return point, item
+      local build_point = network.find_cell_closest_to(position)
+      if build_point and build_point.is_in_construction_range(position) then
+        local select = network.select_pickup_point
+        for k, item in pairs(items) do
+          point = select({name = item.name, position = position})
+          if point then
+            return point, item
+          end
         end
       end
     end
@@ -789,7 +792,6 @@ local check_ghost = function(entity)
     --print("no eligible point with item?")
     return
   end
-
   local chest = point.owner
   local drones = get_idle_drones(point.logistic_network)
   local drone = surface.get_closest(chest.position, drones)
@@ -800,6 +802,7 @@ local check_ghost = function(entity)
   end
 
   local network = point.logistic_network
+  local build_point = network.find_cell_closest_to(position)
 
   local radius = 5
   local area = {{position.x - radius, position.y - radius}, {position.x + radius, position.y + radius}}
@@ -808,13 +811,15 @@ local check_ghost = function(entity)
   local extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, area = area}
   for k, ghost in pairs (extra) do
     if count >= 6 then break end
-    local unit_number = ghost.unit_number
-    local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
-    if should_check then
-      remove_from_list(data.ghosts_to_be_checked, unit_number)
-      data.ghost_check_index = remove_from_list(data.ghosts_to_be_checked_again, unit_number, data.ghost_check_index)
-      extra_targets[unit_number] = ghost
-      count = count + 1
+    if build_point.is_in_construction_range(ghost.position) then
+      local unit_number = ghost.unit_number
+      local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
+      if should_check then
+        remove_from_list(data.ghosts_to_be_checked, unit_number)
+        data.ghost_check_index = remove_from_list(data.ghosts_to_be_checked_again, unit_number, data.ghost_check_index)
+        extra_targets[unit_number] = ghost
+        count = count + 1
+      end
     end
   end
 
@@ -856,6 +861,11 @@ local on_built_entity = function(event)
     print("Adding idle drone")
     set_drone_idle(entity)
     return
+  end
+
+  local logistic_network = entity.logistic_network
+  if logistic_network then
+    data.validate_networks = true
   end
 
   local bounding_box = entity.bounding_box or entity.selection_box
@@ -907,6 +917,7 @@ local check_upgrade = function(upgrade_data)
   end
 
   local network = point.logistic_network
+  local build_point = network.find_cell_closest_to(entity.position)
   local count = 0
 
   local extra_targets = {}
@@ -915,13 +926,15 @@ local check_upgrade = function(upgrade_data)
   local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
   for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, area = area}) do
     if count >= 6 then break end
-    local nearby_index = nearby.unit_number
-    local should_check = data.upgrade_to_be_checked[nearby_index] or data.upgrade_to_be_checked_again[nearby_index]
-    if should_check then
-      extra_targets[nearby_index] = nearby
-      remove_from_list(data.upgrade_to_be_checked, nearby_index)
-      data.upgrade_check_index = remove_from_list(data.upgrade_to_be_checked_again, nearby_index, data.upgrade_check_index)
-      count = count + 1
+    if build_point.is_in_construction_range(nearby.position) then
+      local nearby_index = nearby.unit_number
+      local should_check = data.upgrade_to_be_checked[nearby_index] or data.upgrade_to_be_checked_again[nearby_index]
+      if should_check then
+        extra_targets[nearby_index] = nearby
+        remove_from_list(data.upgrade_to_be_checked, nearby_index)
+        data.upgrade_check_index = remove_from_list(data.upgrade_to_be_checked_again, nearby_index, data.upgrade_check_index)
+        count = count + 1
+      end
     end
   end
 
@@ -1089,8 +1102,8 @@ local check_deconstruction = function(deconstruct)
     print("He is outside of any of our eligible construction areas...")
     return
   end
-
   local position = entity.position
+  local build_point = network.find_cell_closest_to(position)
   local index = position_hash(position)
   local sent = data.sent_deconstruction[index] or 0
 
@@ -1113,16 +1126,19 @@ local check_deconstruction = function(deconstruct)
     local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, area = area}) do
       if count <= 0 then break end
-      local nearby_index = position_hash(nearby.position)
-      local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
-      if should_check then
-        extra_targets[nearby_index] = nearby
-        remove_from_list(data.deconstructs_to_be_checked, nearby_index)
-        data.deconstruction_check_index = remove_from_list(data.deconstructs_to_be_checked_again, nearby_index, data.deconstruction_check_index)
-        count = count - 1
+      if build_point.is_in_construction_range(nearby.position) then
+        local nearby_index = position_hash(nearby.position)
+        local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
+        if should_check then
+          extra_targets[nearby_index] = nearby
+          remove_from_list(data.deconstructs_to_be_checked, nearby_index)
+          data.deconstruction_check_index = remove_from_list(data.deconstructs_to_be_checked_again, nearby_index, data.deconstruction_check_index)
+          count = count - 1
+        end
       end
     end
     local target = surface.get_closest(drone.position, extra_targets)
+    if not target then return end
     extra_targets[position_hash(target.position)] = nil
     local drone_data =
     {
@@ -1186,16 +1202,19 @@ local check_tile_deconstruction = function(entity)
   local drone = surface.get_closest(position, get_idle_drones(network))
   if not drone then return end
 
+  local build_point = network.find_cell_closest_to(position)
   local extra_targets = {}
   local radius = 2
   local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
   for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, area = area}) do
-    local nearby_index = position_hash(nearby.position)
-    local should_check = data.deconstruction_proxies_to_be_checked[nearby_index]
-    if should_check then
-      extra_targets[nearby_index] = nearby
-      remove_from_list(data.deconstructs_to_be_checked, nearby_index)
-      data.deconstruction_tile_check_index = remove_from_list(data.deconstruction_proxies_to_be_checked, nearby_index, data.deconstruction_tile_check_index)
+    if build_point.is_in_construction_range(nearby.position) then
+      local nearby_index = position_hash(nearby.position)
+      local should_check = data.deconstruction_proxies_to_be_checked[nearby_index]
+      if should_check then
+        extra_targets[nearby_index] = nearby
+        remove_from_list(data.deconstructs_to_be_checked, nearby_index)
+        data.deconstruction_tile_check_index = remove_from_list(data.deconstruction_proxies_to_be_checked, nearby_index, data.deconstruction_tile_check_index)
+      end
     end
   end
   local target = surface.get_closest(drone.position, extra_targets)
@@ -1314,19 +1333,21 @@ local check_tile = function(entity)
   end
 
   local network = point.logistic_network
-
+  local build_point = network.find_cell_closest_to(position)
   local radius = 2
   local area = {{position.x - radius, position.y - radius}, {position.x + radius, position.y + radius}}
   local count = 0
   local extra_targets = {}
   local extra = surface.find_entities_filtered{type = tile_ghost_type, area = area}
   for k, ghost in pairs (extra) do
-    local unit_number = ghost.unit_number
-    local should_check = data.tiles_to_be_checked[unit_number] and ghost.ghost_name == ghost_name
-    if should_check then
-      data.tile_check_index = remove_from_list(data.tiles_to_be_checked, unit_number, data.tile_check_index)
-      extra_targets[unit_number] = ghost
-      count = count + 1
+    if build_point.is_in_construction_range(ghost.position) then
+      local unit_number = ghost.unit_number
+      local should_check = data.tiles_to_be_checked[unit_number] and ghost.ghost_name == ghost_name
+      if should_check then
+        data.tile_check_index = remove_from_list(data.tiles_to_be_checked, unit_number, data.tile_check_index)
+        extra_targets[unit_number] = ghost
+        count = count + 1
+      end
     end
   end
 
@@ -1370,7 +1391,7 @@ local check_no_network_drones = function()
 end
 
 local revalidate_logistic_networks = function()
-
+  print("Revalidated all Logistic networks")
   local surfaces = game.surfaces
   for k, force in pairs (game.forces) do
     local networks = force.logistic_networks
@@ -1412,11 +1433,11 @@ local on_tick = function(event)
 
   check_ghost_lists()
 
+  check_upgrade_lists()
+
   check_deconstruction_lists()
 
   check_repair_lists()
-
-  check_upgrade_lists()
 
   check_proxies_lists()
 
@@ -1427,6 +1448,7 @@ local on_tick = function(event)
   check_no_network_drones()
 
   check_logistic_networks_to_validate()
+
 end
 
 local get_build_time = function(drone_data)
@@ -1605,6 +1627,11 @@ local move_to_order_target = function(drone_data, target, range)
   end
   local cell = target.logistic_cell or network.find_cell_closest_to(target.position)
   if cell.owner ~= target and not cell.is_in_construction_range(target.position) then
+    --for k, player in pairs (game.connected_players) do
+    --  player.teleport(target.position)
+    --  game.speed = 0.2
+    --end
+    print(target.unit_number.." - And now? "..target.position.x..", "..target.position.y)
     print("Not in construction range, goodbye")
     return cancel_drone_order(drone_data)
   end
@@ -2093,6 +2120,11 @@ local process_upgrade_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
+  local drone_inventory = get_drone_inventory(drone_data)
+  if drone_inventory.get_item_count(drone_data.item_used_to_place) == 0 then
+    return cancel_drone_order(drone_data)
+  end
+
   local drone = drone_data.entity
 
   if not move_to_order_target(drone_data, target, ranges.interact) then
@@ -2239,6 +2271,11 @@ local process_construct_tile_command = function(drone_data)
   print("Processing construct tile command")
   local target = drone_data.target
   if not (target and target.valid) then
+    return cancel_drone_order(drone_data)
+  end
+  
+  local drone_inventory = get_drone_inventory(drone_data)
+  if drone_inventory.get_item_count(drone_data.item_used_to_place) == 0 then
     return cancel_drone_order(drone_data)
   end
 
