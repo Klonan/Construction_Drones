@@ -1966,7 +1966,6 @@ local process_failed_command = function(drone_data)
   --We REALLY can't get to it or something, tell the player to come sort it out...
   if true then
     drone_data.fail_count = nil
-    --find_non_colliding_position(name, center, radius, precision, force_to_tile_center) 
     local position = drone.surface.find_non_colliding_position(drone.name, drone.position, 0, 2)
     drone.teleport(position)
     drone.surface.create_entity{name = "tutorial-flying-text", position = drone.position, text = "Oof"}
