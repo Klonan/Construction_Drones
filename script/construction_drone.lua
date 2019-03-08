@@ -1627,11 +1627,6 @@ local move_to_order_target = function(drone_data, target, range)
   end
   local cell = target.logistic_cell or network.find_cell_closest_to(target.position)
   if cell.owner ~= target and not cell.is_in_construction_range(target.position) then
-    --for k, player in pairs (game.connected_players) do
-    --  player.teleport(target.position)
-    --  game.speed = 0.2
-    --end
-    print(target.unit_number.." - And now? "..target.position.x..", "..target.position.y)
     print("Not in construction range, goodbye")
     return cancel_drone_order(drone_data)
   end
