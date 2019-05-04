@@ -3,7 +3,7 @@ names = require("shared")
 util = require("script/script_util")
 
 local libs = {
-  auto_request = require("script/auto_request"),
+  --auto_request = require("script/auto_request"),
   construction_drone = require("script/construction_drone"),
   freeplay_interface = require("script/freeplay_interface"),
 }

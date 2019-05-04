@@ -2270,7 +2270,7 @@ local process_construct_tile_command = function(drone_data)
   if not (target and target.valid) then
     return cancel_drone_order(drone_data)
   end
-  
+
   local drone_inventory = get_drone_inventory(drone_data)
   if drone_inventory.get_item_count(drone_data.item_used_to_place) == 0 then
     return cancel_drone_order(drone_data)
@@ -2449,7 +2449,7 @@ local process_follow_command = function(drone_data)
   end
 
   local drone = drone_data.entity
-  if target.type == "player" then
+  if target.type == "character" then
     local player = target.player
     if player then
       local state = player.walking_state
