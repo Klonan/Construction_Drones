@@ -483,7 +483,10 @@ local take_product_stacks = function(inventory, products)
   local insert = inventory.insert
   if products then
     for k, product in pairs (products) do
-      insert(stack_from_product(product))
+      local stack = stack_from_product(product)
+      if stack then
+        insert(stack)
+      end
     end
   end
 end
@@ -2297,7 +2300,10 @@ local process_construct_tile_command = function(drone_data)
   local insert = drone_inventory.insert
   if products then
     for k, product in pairs (products) do
-      insert(stack_from_product(product))
+      local stack = stack_from_product(product)
+      if stack then
+        insert(stack)
+      end
     end
     drone_data.dropoff = {}
   end
@@ -2366,7 +2372,10 @@ local process_deconstruct_tile_command = function(drone_data)
   local insert = drone_inventory.insert
   if products then
     for k, product in pairs (products) do
-      insert(stack_from_product(product))
+      local stack = stack_from_product(product)
+      if stack then
+        insert(stack)
+      end
     end
   end
 
