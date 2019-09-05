@@ -437,15 +437,24 @@ end
 
 local take_product_stacks = function(inventory, products)
   local insert = inventory.insert
+  local to_spill = {}
   if products then
     for k, product in pairs (products) do
       local stack = stack_from_product(product)
       if stack then
-        insert(stack)
+        local leftover = stack.count - insert(stack)
+        if leftover > 0 then
+          to_spill[stack.name] = (to_spill[stack.name] or 0) + leftover
+        end
       end
     end
   end
 end
+
+local destroy_param =
+{
+  raise_destroy = true
+}
 
 local mine_entity = function(inventory, target)
   take_all_content(inventory, target)
@@ -458,19 +467,26 @@ local mine_entity = function(inventory, target)
     return
   end
 
+  --[[
+
+    if not inventory.is_empty() then
+      --Decided they only carry 1 stack now...
+      return
+    end
+    ]]
+
   local prototype = target.prototype
 
-  local destroyed = target.destroy
-  {
-    raise_destroy = true
-  }
+  local products = prototype.mineable_properties.products
+
+  local destroyed = target.destroy(destroy_param)
 
   if not destroyed then
     print("He is still alive after destroying him, tough guy.")
     return false
   end
 
-  take_product_stacks(inventory, prototype.mineable_properties.products)
+  take_product_stacks(inventory, products)
   return true
 end
 
@@ -527,7 +543,7 @@ local check_list = function(list, index, check_function, count)
     local this_index = index
     entry = list[this_index]
     --TODO maybe change the index when doing the extra target logic
-    --if not entry then this_index = nil end
+    if not entry then game.print("fuk") this_index = nil end
     index = next(list, this_index)
     if entry and check_function(entry) == true then
       list[this_index] = nil
@@ -1590,6 +1606,7 @@ local process_deconstruct_command = function(drone_data)
       return drone_wait(drone_data, 300)
     end
     cancel_drone_order(drone_data)
+    return
   end
 
   local target = get_extra_target(drone_data)
@@ -2008,7 +2025,7 @@ local directions =
 
 process_return_to_character_command = function(drone_data)
 
-  game.print("returning to dude")
+  print("returning to dude")
 
   local target = drone_data.character
   if not (target and target.valid) then
