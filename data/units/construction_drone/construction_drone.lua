@@ -80,7 +80,7 @@ local unit = {
     animation = animation
   },
   vision_distance = 10,
-  movement_speed = 0.16,
+  movement_speed = 0.1,
   distance_per_frame = 0.1,
   pollution_to_join_attack = 20000000,
   distraction_cooldown = 30000000,
