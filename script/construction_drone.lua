@@ -6,13 +6,15 @@ local remove = table.remove
 local pairs = pairs
 local beams = names.beams
 local proxy_name = names.entities.construction_drone_proxy_chest
+local drone_range = 100
 
 drone_prototypes =
 {
   [names.units.construction_drone] =
   {
     interact_range = 6,
-    follow_range = 20
+    follow_range = 20,
+    return_to_character_range = 1
   },
 }
 
@@ -63,7 +65,8 @@ local drone_orders =
   tile_construct = 6,
   tile_deconstruct = 7,
   cliff_deconstruct = 8,
-  follow = 9
+  follow = 9,
+  return_to_character = 10
 }
 
 local data =
@@ -88,15 +91,60 @@ local data =
   deconstruction_map = {},
   no_network_drones = {},
   networks = {},
-  allow_in_active_networks = true
+  allow_in_active_networks = true,
+  characters = {}
 }
+
+local add_character = function(character)
+  local characters = data.characters
+
+  local surface_characters = characters[character.surface.index]
+
+  if not surface_characters then
+    surface_characters = {}
+    characters[character.surface.index] = surface_characters
+  end
+
+  local force_characters = surface_characters[character.force.index]
+
+  if not force_characters then
+    force_characters = {}
+    surface_characters[character.force.index] = force_characters
+  end
+
+  force_characters[character.unit_number] = character
+
+end
+
+local get_characters = function(surface, force)
+  return data.characters[surface.index] and data.characters[surface.index][force.index]
+end
+
+local abs = math.abs
+
+local rect_dist = function(position_1, position_2)
+  return abs(position_1.x - position_2.x) + abs(position_1.y - position_2.y)
+end
+
+local get_characters_in_distance = function(entity)
+  local all_characters = get_characters(entity.surface, entity.force)
+  local origin = entity.position
+  local characters = {}
+  for k, character in pairs (all_characters) do
+    game.print("HIIII")
+    if character.get_item_count(names.units.construction_drone) > 0 and rect_dist(origin, character.position) <= drone_range then
+      characters[character.unit_number] = character
+    end
+  end
+  return characters
+end
 
 local get_drone_radius = function()
   return 0.3
 end
 
 local print = function(string)
-  if not data.debug then return end
+  --if not data.debug then return end
   local tick = game.tick
   log(tick.." | "..string)
   game.print(tick.." | "..string)
@@ -123,7 +171,8 @@ end
 local ranges =
 {
   interact = 1,
-  follow = 2
+  follow = 2,
+  return_to_character = 3
 }
 
 local get_radius = function(entity, range)
@@ -142,6 +191,8 @@ local get_radius = function(entity, range)
       radius = get_radius_map()[entity.name] + drone_prototypes[entity.name].interact_range
     elseif range == ranges.follow then
       radius = get_radius_map()[entity.name] + drone_prototypes[entity.name].follow_range
+    elseif range == ranges.return_to_character then
+      radius = get_radius_map()[entity.name] + drone_prototypes[entity.name].return_to_character_range
     else
       radius = get_radius_map()[entity.name]
     end
@@ -595,24 +646,16 @@ local get_drone_stack_capacity = function(force)
   return drone_stack_capacity
 end
 
-local get_point = function(prototype, entity)
-  local position = entity.position
-  local surface = entity.surface
-  local force = entity.force
-  local networks = surface.find_logistic_networks_by_construction_area(position, force)
+local get_character_point = function(prototype, entity)
   local items = prototype.items_to_place_this
-  for k, network in pairs (networks) do
-    --If there are the normal bots in the network, let them handle it!
-    if data.allow_in_active_networks or network.available_construction_robots == 0 then
-      local build_point = network.find_cell_closest_to(position)
-      if build_point and build_point.is_in_construction_range(position) then
-        local select = network.select_pickup_point
-        for k, item in pairs(items) do
-          point = select({name = item.name, position = position})
-          if point then
-            return point, item
-          end
-        end
+
+  local characters = get_characters_in_distance(entity)
+
+  for k, character in pairs (characters) do
+    game.print("character is here")
+    for k, item in pairs(items) do
+      if character.get_item_count(item.name) >= item.count then
+        return character, item
       end
     end
   end
@@ -722,6 +765,14 @@ local update_drone_sticker
 
 local process_drone_command
 
+local make_character_drone = function(character)
+  local drone = character.surface.create_entity{name = names.units.construction_drone, position = character.position, force = character.force}
+  character.remove_item({name = names.units.construction_drone, count = 1})
+  return drone
+end
+
+local process_return_to_character_command
+
 local set_drone_order = function(drone, drone_data)
   drone.ai_settings.path_resolution_modifier = -2
   drone.ai_settings.do_separation = true
@@ -742,41 +793,8 @@ local set_drone_idle = function(drone)
   print("Setting drone idle")
   local drone_data = data.drone_commands[drone.unit_number]
 
-  if drone_data then
-    update_drone_sticker(drone_data)
-    local stack = get_drone_first_stack(drone_data)
-    if stack then
-      drone_data.dropoff = {stack = stack}
-      return process_drone_command(drone_data)
-    end
-  end
-
-  drone.speed = math.random() * drone.prototype.speed
-  data.drone_commands[drone.unit_number] = nil
-  add_idle_drone(drone)
-
-  local network = get_nearest_network(drone)
-  if network then
-    local destination_cell = network.find_cell_closest_to(drone.position)
-    local owner = destination_cell.owner
-    if destination_cell.mobile then
-      local drone_data =
-      {
-        order = drone_orders.follow,
-        target = owner
-      }
-      set_drone_order(drone, drone_data)
-      add_idle_drone(drone)
-      return
-    end
-    print("Set to go to logistic point")
-    drone.set_command
-    {
-      type = defines.command.go_to_location,
-      destination_entity = owner,
-      distraction = defines.distraction.none,
-      radius = math.max(destination_cell.logistic_radius, get_radius(drone) + get_radius(owner))
-    }
+  if drone_data.character then
+    process_return_to_character_command(drone_data)
   end
 
 end
@@ -789,57 +807,59 @@ local check_ghost = function(entity)
   local position = entity.position
 
   local prototype = game.entity_prototypes[entity.ghost_name]
-  local point, item = get_point(prototype, entity)
+  local character, item = get_character_point(prototype, entity)
 
-  if not point then
-    --print("no eligible point with item?")
-    return
-  end
-  local chest = point.owner
-  local drones = get_idle_drones(point.logistic_network)
-  local drone = surface.get_closest(chest.position, drones)
-
-  if not drone then
-    --print("No drones for pickup")
+  if not character then
+    game.print("HI")
     return
   end
 
+  local drone = make_character_drone(character)
+
+  --[[
   local network = point.logistic_network
   local build_point = network.find_cell_closest_to(position)
 
-  local radius = 5
-  local area = {{position.x - radius, position.y - radius}, {position.x + radius, position.y + radius}}
-  local count = 0
-  local extra_targets = {} --{[entity.unit_number] = entity}
-  local extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, area = area}
-  for k, ghost in pairs (extra) do
-    if count >= 6 then break end
-    if build_point.is_in_construction_range(ghost.position) then
-      local unit_number = ghost.unit_number
-      local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
-      if should_check then
-        remove_from_list(data.ghosts_to_be_checked, unit_number)
-        data.ghost_check_index = remove_from_list(data.ghosts_to_be_checked_again, unit_number, data.ghost_check_index)
-        extra_targets[unit_number] = ghost
-        count = count + 1
+
+    local radius = 5
+    local area = {{position.x - radius, position.y - radius}, {position.x + radius, position.y + radius}}
+    local count = 0
+    local extra_targets = {} --{[entity.unit_number] = entity}
+    local extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, area = area}
+    for k, ghost in pairs (extra) do
+      if count >= 6 then break end
+      if build_point.is_in_construction_range(ghost.position) then
+        local unit_number = ghost.unit_number
+        local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
+        if should_check then
+          data.ghost_check_index = remove_from_list(data.ghosts_to_be_checked_again, unit_number, data.ghost_check_index)
+          extra_targets[unit_number] = ghost
+          count = count + 1
+        end
       end
     end
-  end
 
-  --game.print("size "..table_size(extra_targets))
-  --game.print("count "..count)
-  --print(serpent.block(extra_targets))
+    --game.print("size "..table_size(extra_targets))
+    --game.print("count "..count)
+    --print(serpent.block(extra_targets))
 
-  local target = surface.get_closest(chest.position, extra_targets)
-  extra_targets[target.unit_number] = nil
+    local target = surface.get_closest(chest.position, extra_targets)
+    extra_targets[target.unit_number] = nil
+    ]]
+
+    local target = entity
+    remove_from_list(data.ghosts_to_be_checked_again, target.unit_number)
+    remove_from_list(data.ghosts_to_be_checked, target.unit_number)
+
   local drone_data =
   {
+    character = character,
     order = drone_orders.construct,
-    pickup = {chest = chest, stack = {name = item.name, count = count}},
-    network = network,
+    pickup = {chest = character, stack = item},
     target = target,
     item_used_to_place = item.name,
-    extra_targets = extra_targets
+    --network = network,
+    --extra_targets = extra_targets
   }
 
   return set_drone_order(drone, drone_data)
@@ -902,7 +922,7 @@ local check_upgrade = function(upgrade_data)
 
   local surface = entity.surface
   local force = entity.force
-  local point, item = get_point(target_prototype, entity)
+  local point, item = get_character_point(target_prototype, entity)
   if not point then return end
 
   if not point then
@@ -1319,7 +1339,7 @@ local check_tile = function(entity)
   local ghost_name = entity.ghost_name
 
   local tile_prototype = game.tile_prototypes[ghost_name]
-  local point, item = get_point(tile_prototype, entity)
+  local point, item = get_character_point(tile_prototype, entity)
 
   if not point then
     print("no eligible point with item?")
@@ -1621,36 +1641,22 @@ end
  117.000 Script @__Construction_Drones__/script/construction_drone.lua:101: 5845 | Follow | 24]]
 
 local move_to_order_target = function(drone_data, target, range)
-  if in_construction_range(drone_data.entity, target, range) then
+
+  local drone = drone_data.entity
+
+  if in_construction_range(drone, target, range) then
     return true
   end
-  local network = get_or_find_network(drone_data)
-  if not network then
-    return drone_wait(drone_data, 300)
-  end
-  local cell = target.logistic_cell or network.find_cell_closest_to(target.position)
-  if cell.owner ~= target and not cell.is_in_construction_range(target.position) then
-    print("Not in construction range, goodbye")
-    return cancel_drone_order(drone_data)
-  end
-  if cell.logistic_network ~= network then
-    print("Not in same network, goodbye")
-    return cancel_drone_order(drone_data)
-  end
-  local drone = drone_data.entity
-  if cell.is_in_construction_range(drone.position) then
-    return drone.set_command
-    {
-      type = defines.command.go_to_location,
-      destination_entity = target,
-      radius = get_radius(drone, range) + get_radius(target),
-      distraction = defines.distraction.none,
-      pathfind_flags = drone_pathfind_flags
-    }
-  end
 
-  drone_data.path = get_drone_path(drone, network, target)
-  return process_drone_command(drone_data)
+  drone.set_command
+  {
+    type = defines.command.go_to_location,
+    destination_entity = target,
+    radius = get_radius(drone, range) + get_radius(target),
+    distraction = defines.distraction.none,
+    pathfind_flags = drone_pathfind_flags
+  }
+
 end
 
 update_drone_sticker = function(drone_data)
@@ -1707,6 +1713,13 @@ local process_pickup_command = function(drone_data)
   update_drone_sticker(drone_data)
 
   drone_data.pickup = nil
+
+  if chest == drone_data.character then
+    --make picking up from player instant.
+    return process_drone_command(drone_data)
+  end
+
+
   local drone = drone_data.entity
   local build_time = get_build_time(drone_data)
   drone.surface.create_entity
@@ -2444,48 +2457,24 @@ local directions =
   [defines.direction.northwest] = {-1, -1},
 }
 
-local process_follow_command = function(drone_data)
+process_return_to_character_command = function(drone_data)
 
-  local target = drone_data.target
-  if not (target and target.valid and target.logistic_network) then
+  game.print("returning to dude")
+
+  local target = drone_data.character
+  if not (target and target.valid) then
     return cancel_drone_order(drone_data)
   end
 
-  local check_time = random(20, 40)
-
-  if not move_to_order_target(drone_data, drone_data.target, ranges.follow) then
+  if not move_to_order_target(drone_data, target, ranges.return_to_character) then
     return
   end
 
-  local drone = drone_data.entity
-  if target.type == "character" then
-    local player = target.player
-    if player then
-      local state = player.walking_state
-      if state.walking then
-        local offset = directions[state.direction]
-        local target_speed = target.character_running_speed
-        local new_position = {drone.position.x + (offset[1] * check_time * target_speed), drone.position.y + (offset[2] * check_time * target_speed)}
-        drone.speed = math.min(drone.prototype.speed, target_speed * (check_time / (check_time - 1)))
-        return drone.set_command
-        {
-          type = defines.command.go_to_location,
-          radius = 1,
-          distraction = defines.distraction.none,
-          destination = drone.surface.find_non_colliding_position(drone.name, new_position, 0, 1)
-        }
-      end
-    end
-  end
 
-  --todo wander in a random direction...
-  drone.speed = drone.prototype.speed * ((random() * 0.5) + 0.5)
-  return drone_data.entity.set_command
-  {
-    type = defines.command.wander,
-    distraction = defines.distraction.none,
-    ticks_to_wait = check_time,
-  }
+  if target.insert({name = names.units.construction_drone, count = 1}) == 0 then return end
+
+  drone_data.entity.destroy()
+
 end
 
 
@@ -2567,6 +2556,10 @@ process_drone_command = function(drone_data, result)
   if drone_data.order == drone_orders.follow then
     print("Follow")
     return process_follow_command(drone_data)
+  end
+
+  if drone_data.character then
+    return process_return_to_character_command(drone_data)
   end
 
   print("Nothin")
@@ -2705,6 +2698,22 @@ local resetup_ghosts = function()
   end
 end
 
+local setup_characters = function()
+  data.characters = {}
+  for k, surface in pairs (game.surfaces) do
+    for k, character in pairs (surface.find_entities_filtered{type = "character"}) do
+      add_character(character)
+    end
+  end
+end
+
+local on_player_created = function(event)
+  local player = game.get_player(event.player_index)
+  if player.character then
+    add_character(player.character)
+  end
+end
+
 local lib = {}
 
 local events =
@@ -2715,6 +2724,7 @@ local events =
   [defines.events.on_entity_died] = on_entity_removed,
   [defines.events.on_robot_mined_entity] = on_entity_removed,
   [defines.events.on_player_mined_entity] = on_entity_removed,
+  [defines.events.on_player_created] = on_player_created,
   [defines.events.on_marked_for_deconstruction] = on_marked_for_deconstruction,
   [defines.events.on_pre_ghost_deconstructed] = on_entity_removed,
   [defines.events.on_post_entity_died] = on_built_entity,
@@ -2739,21 +2749,27 @@ lib.on_load = function()
 end
 
 lib.on_init = function()
-  game.map_settings.steering.default.force_unit_fuzzy_goto_behavior = true
-  game.map_settings.steering.moving.force_unit_fuzzy_goto_behavior = true
+  game.map_settings.steering.default.force_unit_fuzzy_goto_behavior = false
+  game.map_settings.steering.moving.force_unit_fuzzy_goto_behavior = false
   global.construction_drone = global.construction_drone or data
   resetup_ghosts()
+  setup_characters()
   register_events()
+
   if remote.interfaces["unit_control"] then
-    --remote.call("unit_control", "register_unit_unselectable", drone_name)
+    remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
   end
 end
 
 lib.on_configuration_changed = function()
   if remote.interfaces["unit_control"] then
-    --remote.call("unit_control", "register_unit_unselectable", drone_name)
+    remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
   end
   data.validate_networks = true
+  if not data.characters then
+    setup_characters()
+  end
+
 end
 
 lib.get_events = function() return events end
