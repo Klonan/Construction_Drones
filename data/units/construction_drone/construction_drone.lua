@@ -131,7 +131,7 @@ local item = {
   subgroup = data.raw.item["construction-robot"].subgroup,
   order = "a-"..name,
   stack_size= 10,
-  place_result = name
+  place_result = nil --name
 }
 
 local recipe = {
@@ -314,10 +314,13 @@ local simple_provider_chest_recipe = {
   result = simple_provider_chest_name
 }
 
-local equipment_grid_name = "tiny-equipment-grid"
-for k, armor in pairs (data.raw.armor) do
-  armor.equipment_grid = armor.equipment_grid or equipment_grid_name
-end
+--[[
+
+  local equipment_grid_name = "tiny-equipment-grid"
+  for k, armor in pairs (data.raw.armor) do
+    armor.equipment_grid = armor.equipment_grid or equipment_grid_name
+  end
+  ]]
 
 local equipment_category = {
   type = "equipment-category",
@@ -431,32 +434,35 @@ local technology = {
       type = "unlock-recipe",
       recipe = name
     },
-    {
-      type = "unlock-recipe",
-      recipe = names.entities.logistic_beacon
+    --[[
+
+      {
+        type = "unlock-recipe",
+        recipe = names.entities.logistic_beacon
+      },
+      {
+        type = "unlock-recipe",
+        recipe = simple_storage_chest_name
+      },
+      {
+        type = "unlock-recipe",
+        recipe = simple_provider_chest_name
+      },
+      {
+        type = "unlock-recipe",
+        recipe = equipment_name
+      },
+      ]]
+      {
+        type = "ghost-time-to-live",
+        modifier = 60 * 60 * 60 * 24 * 7
+      }
     },
+    unit =
     {
-      type = "unlock-recipe",
-      recipe = simple_storage_chest_name
-    },
-    {
-      type = "unlock-recipe",
-      recipe = simple_provider_chest_name
-    },
-    {
-      type = "unlock-recipe",
-      recipe = equipment_name
-    },
-    {
-      type = "ghost-time-to-live",
-      modifier = 60 * 60 * 60 * 24 * 7
-    }
-  },
-  unit =
-  {
-    count = 200,
-    ingredients = {
-      {"automation-science-pack", 1},
+      count = 200,
+      ingredients = {
+        {"automation-science-pack", 1},
       --{"logistic-science-pack", 1},
     },
     time = 30
@@ -470,7 +476,7 @@ local proxy_chest = util.copy(data.raw.container["wooden-chest"])
 proxy_chest.name = proxy_chest_name
 proxy_chest.localised_name = proxy_chest_name
 proxy_chest.collision_box = nil
-proxy_chest.inventory_size = 9
+proxy_chest.inventory_size = 1
 proxy_chest.order = "nnov"
 
 local beam_blend_mode = "additive"
@@ -600,19 +606,19 @@ data:extend
   unit,
   item,
   recipe,
-  shoo,
+  --shoo,
   technology,
-  simple_provider_chest,
-  simple_provider_chest_item,
-  simple_provider_chest_recipe,
-  simple_storage_chest,
-  simple_storage_chest_item,
-  simple_storage_chest_recipe,
-  equipment,
-  equipment_grid,
-  equipment_item,
-  equipment_recipe,
-  equipment_category,
+  --simple_provider_chest,
+  --simple_provider_chest_item,
+  --simple_provider_chest_recipe,
+  --simple_storage_chest,
+  --simple_storage_chest_item,
+  --simple_storage_chest_recipe,
+  --equipment,
+  --equipment_grid,
+  --equipment_item,
+  --equipment_recipe,
+  --equipment_category,
   proxy_chest,
   build_beam,
   deconstruct_beam,
