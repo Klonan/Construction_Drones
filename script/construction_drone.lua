@@ -12,7 +12,7 @@ drone_prototypes =
 {
   [names.units.construction_drone] =
   {
-    interact_range = 6,
+    interact_range = 4,
     return_to_character_range = -1
   },
 }
@@ -140,7 +140,7 @@ local get_drone_radius = function()
 end
 
 local print = function(string)
-  if not data.debug then return end
+  --if not data.debug then return end
   local tick = game.tick
   log(tick.." | "..string)
   game.print(tick.." | "..string)
@@ -521,10 +521,9 @@ local check_priority_list = function(list, other_list, check_function, count)
   while count > 0 do
     local index, entry = next(list)
     if index == nil then break end
-    if not check_function(entry) then
-      other_list[index] = entry
-    end
+    other_list[index] = entry
     list[index] = nil
+    check_function(entry)
     count = count - 1
   end
   return count
@@ -540,7 +539,7 @@ local check_list = function(list, index, check_function, count)
     local this_index = index
     entry = list[this_index]
     --TODO maybe change the index when doing the extra target logic
-    if not entry then game.print("fuk") this_index = nil end
+    if not entry then return nil end
     index = next(list, this_index)
     if entry and check_function(entry) == true then
       list[this_index] = nil
@@ -552,6 +551,7 @@ local check_list = function(list, index, check_function, count)
 end
 
 local remove_from_list = function(list, index, global_index)
+  if not list[index] then return global_index end
   if global_index and global_index == index then
     global_index = next(list, index)
   end
@@ -633,7 +633,10 @@ local set_drone_idle = function(drone)
       return
     end
     find_a_character(drone_data)
+    return
   end
+
+  set_drone_order(drone, {})
 
 end
 
@@ -687,8 +690,7 @@ local check_ghost = function(entity)
     extra_targets = extra_targets
   }
 
-  set_drone_order(drone, drone_data)
-  return true
+  return set_drone_order(drone, drone_data)
 end
 
 local on_built_entity = function(event)
@@ -844,7 +846,7 @@ local check_cliff_deconstruction = function(deconstruct)
   local characters = get_characters_in_distance(entity, force)
 
   for k, character in pairs (characters) do
-    if not character.get_item_count(cliff_destroying_item) then
+    if character.get_item_count(cliff_destroying_item) == 0 then
       characters[k] = nil
     end
   end
@@ -938,8 +940,7 @@ local check_deconstruction = function(deconstruct)
       target = target,
       extra_targets = extra_targets
     }
-    set_drone_order(drone, drone_data)
-    return true
+    return set_drone_order(drone, drone_data)
   end
 
   for k = 1, math.min(needed, 10, character.get_item_count(names.units.construction_drone)) do
@@ -954,17 +955,18 @@ local check_deconstruction = function(deconstruct)
     set_drone_order(drone, drone_data)
     sent = sent + 1
   end
+
   data.sent_deconstruction[index] = sent
   return sent >= needed
 
 end
 
-  local check_deconstruction_lists = function()
+local check_deconstruction_lists = function()
 
-    local remaining_checks = check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, max_checks_per_tick)
-    data.deconstruction_check_index = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction, remaining_checks)
+  local remaining_checks = check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, max_checks_per_tick)
+  data.deconstruction_check_index = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction, remaining_checks)
 
-  end
+end
 
 local check_tile_deconstruction = function(entity)
 
@@ -996,6 +998,7 @@ local check_tile_deconstruction = function(entity)
   end
   local target = surface.get_closest(drone.position, extra_targets)
   extra_targets[position_hash(target.position)] = nil
+
   local drone_data =
   {
     character = character,
@@ -1003,6 +1006,7 @@ local check_tile_deconstruction = function(entity)
     target = target,
     extra_targets = extra_targets
   }
+
   return set_drone_order(drone, drone_data)
 end
 
@@ -1129,19 +1133,19 @@ end
 
 local on_tick = function(event)
 
+  check_deconstruction_lists()
+
   check_ghost_lists()
 
   check_upgrade_lists()
-
-  check_deconstruction_lists()
 
   check_repair_lists()
 
   check_proxies_lists()
 
-  check_tile_lists()
-
   check_tile_deconstruction_lists()
+
+  check_tile_lists()
 
 end
 
@@ -1288,7 +1292,7 @@ local move_to_order_target = function(drone_data, target, range)
   {
     type = defines.command.go_to_location,
     destination_entity = target,
-    radius = get_radius(drone, range) + get_radius(target),
+    radius = (target == drone_data.character and 1) or (get_radius(drone, range) + get_radius(target)),
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }
@@ -2198,11 +2202,13 @@ process_drone_command = function(drone_data, result)
     return process_deconstruct_cliff_command(drone_data)
   end
 
+  find_a_character(drone_data)
+
   if drone_data.character then
     return process_return_to_character_command(drone_data)
   end
 
-  print("Nothin")
+  game.print("Nothin")
   return set_drone_idle(drone)
 end
 
@@ -2385,6 +2391,14 @@ lib.on_configuration_changed = function()
     setup_characters()
     for k, drone_data in pairs (data.drone_commands) do
       find_a_character(drone_data)
+    end
+  end
+
+  if data.idle_drones then
+    for k, drones in pairs (data.idle_drones) do
+      for k, drone in pairs (drones) do
+        set_drone_idle(drone)
+      end
     end
   end
 
