@@ -6,13 +6,14 @@ local pairs = pairs
 local beams = names.beams
 local proxy_name = names.entities.construction_drone_proxy_chest
 local drone_range = 100
+local beam_offset = {0, -0.5}
 
 drone_prototypes =
 {
   [names.units.construction_drone] =
   {
     interact_range = 6,
-    return_to_character_range = 0
+    return_to_character_range = -1
   },
 }
 
@@ -127,7 +128,7 @@ local get_characters_in_distance = function(entity, force)
   for k, character in pairs (all_characters) do
     if not character.valid then
       all_characters[k] = nil
-    elseif character.get_item_count(names.units.construction_drone) > 0 and rect_dist(origin, character.position) <= drone_range then
+    elseif character.allow_dispatching_robots and character.get_item_count(names.units.construction_drone) > 0 and rect_dist(origin, character.position) <= drone_range then
       characters[character.unit_number] = character
     end
   end
@@ -145,13 +146,9 @@ local print = function(string)
   game.print(tick.." | "..string)
 end
 
-local dist = function(cell_a, cell_b)
-  local position1 = cell_a.owner.position
-  local position2 = cell_b.owner.position
-  return ((position2.x - position1.x) * (position2.x - position1.x)) + ((position2.y - position1.y) * (position2.y - position1.y))
-end
-
 local oofah = (2 ^ 0.5) / 2
+
+local radius_map
 
 local get_radius_map = function()
   --Caching radius map, deliberately not local or data
@@ -598,6 +595,14 @@ local process_drone_command
 local make_character_drone = function(character)
   local drone = character.surface.create_entity{name = names.units.construction_drone, position = character.position, force = character.force}
   character.remove_item({name = names.units.construction_drone, count = 1})
+  rendering.draw_light
+  {
+    sprite = "drone-light",
+    oriented = true,
+    target = drone,
+    target_offset = {0, -0.5},
+    surface = drone.surface,
+  }
   return drone
 end
 
@@ -1290,33 +1295,92 @@ local move_to_order_target = function(drone_data, target, range)
 
 end
 
+local insert = table.insert
+
+local offsets =
+{
+  {0, 0},
+  {0.25, 0},
+  {0, 0.25},
+  {0.25, 0.25},
+}
+
 update_drone_sticker = function(drone_data)
 
   local sticker = drone_data.sticker
   if sticker and sticker.valid then
     sticker.destroy()
+    --Legacy
+  end
+
+  local renderings = drone_data.renderings
+  if renderings then
+    for k, v in pairs (renderings) do
+      rendering.destroy(v)
+    end
+    drone_data.renderings = nil
   end
 
   local inventory = get_drone_inventory(drone_data)
 
-  local stack = inventory[1]
-  local item_name = stack and stack.valid and stack.valid_for_read and stack.name
-  if not item_name then return end
+  local contents = inventory.get_contents()
 
-  local sticker_name = item_name.." Drone Sticker"
-  if not game.entity_prototypes[sticker_name] then
-    print("No sticker with name sticker_name")
+  if not next(contents) then return end
+
+  local number = table_size(contents)
+
+  local drone = drone_data.entity
+  local surface = drone.surface
+  local forces = {drone.force}
+
+  local renderings = {}
+  drone_data.renderings = renderings
+
+  insert(renderings, rendering.draw_sprite
+  {
+    sprite = "utility/entity_info_dark_background",
+    target = drone,
+    surface = surface,
+    forces = forces,
+    only_in_alt_mode = true,
+    target_offset = {0, -0.5},
+    x_scale = 0.5,
+    y_scale = 0.5,
+  })
+
+  if number == 1 then
+    insert(renderings, rendering.draw_sprite
+    {
+      sprite = "item/"..next(contents),
+      target = drone,
+      surface = surface,
+      forces = forces,
+      only_in_alt_mode = true,
+      target_offset = {0, -0.5},
+      x_scale = 0.5,
+      y_scale = 0.5,
+    })
     return
   end
-  local drone = drone_data.entity
 
-  drone_data.sticker = drone.surface.create_entity
-  {
-    name = sticker_name,
-    position = drone.position,
-    target = drone,
-    force = drone.force
-  }
+  local offset_index = 1
+
+  for name, count in pairs (contents) do
+    local offset = offsets[offset_index]
+    insert(renderings, rendering.draw_sprite
+    {
+      sprite = "item/"..name,
+      target = drone,
+      surface = surface,
+      forces = forces,
+      only_in_alt_mode = true,
+      target_offset = {-0.125 + offset[1], -0.5 + offset[2]},
+      x_scale = 0.25,
+      y_scale = 0.25,
+    })
+    offset_index = offset_index + 1
+  end
+
 
 end
 
@@ -1359,7 +1423,8 @@ local process_pickup_command = function(drone_data)
     target = drone,
     position = drone.position,
     force = drone.force,
-    duration = build_time
+    duration = build_time,
+    source_offset = beam_offset
   }
   return drone_wait(drone_data, build_time)
 end
@@ -1516,7 +1581,8 @@ local process_construct_command = function(drone_data)
     target = entity,
     position = drone.position,
     force = drone.force,
-    duration = build_time
+    duration = build_time,
+    source_offset = beam_offset
   }
   return drone_wait(drone_data, build_time)
 end
@@ -1586,7 +1652,8 @@ local process_deconstruct_command = function(drone_data)
       target_position = target.position,
       position = drone.position,
       force = drone.force,
-      duration = build_time
+      duration = build_time,
+      source_offset = beam_offset
     }
     return drone_wait(drone_data, build_time)
   else
@@ -1682,7 +1749,8 @@ local process_repair_command = function(drone_data)
     target = target,
     position = drone.position,
     force = drone.force,
-    duration = ticks_to_repair
+    duration = ticks_to_repair,
+    source_offset = beam_offset
   }
 
   return drone_wait(drone_data, ticks_to_repair)
@@ -1768,7 +1836,8 @@ local process_upgrade_command = function(drone_data)
     target = upgraded,
     position = drone.position,
     force = drone.force,
-    duration = build_time
+    duration = build_time,
+    source_offset = beam_offset
   }
   return drone_wait(drone_data, build_time)
 end
@@ -1838,7 +1907,8 @@ local process_request_proxy_command = function(drone_data)
     target_position = position,
     position = drone.position,
     force = drone.force,
-    duration = build_time
+    duration = build_time,
+    source_offset = beam_offset
   }
 
   update_drone_sticker(drone_data)
@@ -1900,7 +1970,8 @@ local process_construct_tile_command = function(drone_data)
     target_position = position,
     position = drone.position,
     force = drone.force,
-    duration = build_time
+    duration = build_time,
+    source_offset = beam_offset
   }
   return drone_wait(drone_data, build_time)
 end
@@ -1931,7 +2002,8 @@ local process_deconstruct_tile_command = function(drone_data)
       target_position = position,
       position = drone.position,
       force = drone.force,
-      duration = build_time
+      duration = build_time,
+      source_offset = beam_offset
     }
     drone_data.beam = true
     return drone_wait(drone_data, build_time)
@@ -1994,7 +2066,8 @@ local process_deconstruct_cliff_command = function(drone_data)
       target_position = target.position,
       position = drone.position,
       force = drone.force,
-      duration = build_time
+      duration = build_time,
+      source_offset = beam_offset
     }
     drone_data.beam = true
     return drone_wait(drone_data, build_time)

@@ -476,7 +476,7 @@ local proxy_chest = util.copy(data.raw.container["wooden-chest"])
 proxy_chest.name = proxy_chest_name
 proxy_chest.localised_name = proxy_chest_name
 proxy_chest.collision_box = nil
-proxy_chest.inventory_size = 1
+proxy_chest.inventory_size = 4
 proxy_chest.order = "nnov"
 
 local beam_blend_mode = "additive"
@@ -560,6 +560,9 @@ local beam_base =
   }
 }
 
+beam_base = util.copy(data.raw.beam["laser-beam"])
+beam_base.damage_interval = 10000
+
 local beams = names.beams
 
 local build_beam = util.copy(beam_base)
@@ -601,6 +604,18 @@ attack_beam.action =
   }
 }
 
+local light =
+{
+  type = "sprite",
+  name = "drone-light",
+  filename = path.."drone-light-cone.png",
+  priority = "extra-high",
+  flags = {"light"},
+  width = 200,
+  height = 430,
+  --shift = {0, -200/32}
+}
+
 data:extend
 {
   unit,
@@ -623,5 +638,6 @@ data:extend
   build_beam,
   deconstruct_beam,
   pickup_beam,
-  attack_beam
+  attack_beam,
+  light
 }
