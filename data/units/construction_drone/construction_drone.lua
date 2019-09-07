@@ -16,7 +16,7 @@ local animation =
       frame_count = 1,
       direction_count = 32,
       axially_symmetrical = false,
-      scale = 0.33,
+      scale = 0.4,
       shift = util.by_pixel(0, -14),
     },
     walk_shadow =
@@ -30,7 +30,7 @@ local animation =
       axially_symmetrical = false,
       shift = util.by_pixel(10.5, -8.5),
       draw_as_shadow = true,
-      scale = 0.33,
+      scale = 0.4,
     }
   }
 }
@@ -45,11 +45,12 @@ local unit = {
   map_color = {r = 0, g = 1, b = 1, a = 1},
   max_health = 45,
   order = "b-b-a",
-  subgroup="enemies",
+  subgroup="logistic-network",
   has_belt_immunity = false,
   can_open_gates = true,
   affected_by_tiles = true,
-  collision_box = {{-0.12, -0.12 }, {0.12, 0.12}},
+  collision_box = {{-0.10, -0.10 }, {0.00, 0.00}},
+  --collision_box = {{-0.2, -0.2}, {0.2, 0.2}},
   selection_box = {{-0.6 * scale, -1.0 * scale}, {0.6 * scale, 0.4 * scale}},
   collision_mask = util.ground_unit_collision_mask(),
   attack_parameters =
@@ -80,7 +81,7 @@ local unit = {
     animation = animation
   },
   vision_distance = 10,
-  movement_speed = 0.1,
+  movement_speed = 0.16,
   distance_per_frame = 0.1,
   pollution_to_join_attack = 20000000,
   distraction_cooldown = 30000000,
@@ -116,7 +117,7 @@ local unit = {
     destroy_when_commands_fail = false,
     allow_try_return_to_spawner = false,
     do_separation = true,
-    path_resolution_modifier = -2
+    path_resolution_modifier = 0
   }
 }
 

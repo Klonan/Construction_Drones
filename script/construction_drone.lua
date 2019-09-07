@@ -45,7 +45,7 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_checks_per_tick = 6
+local max_checks_per_tick = 3
 
 local drone_pathfind_flags =
 {
@@ -90,6 +90,30 @@ local data =
   characters = {}
 }
 
+local sin, cos = math.sin, math.cos
+
+local get_beam_orientation = function(source_position, target_position)
+
+    -- Angle in rads
+    local angle = util.angle(target_position, source_position)
+
+    -- Convert to orientation
+    local orientation =  (angle / (2 * math.pi)) - 0.25
+    if orientation < 0 then orientation = orientation + 1 end
+
+    local x, y = 0, 0.5
+
+
+    --[[x = x cos θ − y sin θ
+    y = x sin θ + y cos θ]]
+    angle = angle + (math.pi / 2)
+    local x1 = (x * cos(angle)) - (y * sin(angle))
+    local y1 = (x * sin(angle)) + (y * cos(angle))
+
+    return orientation, {x1, y1 - 0.5}
+
+end
+
 local add_character = function(character)
   local characters = data.characters
 
@@ -112,7 +136,13 @@ local add_character = function(character)
 end
 
 local get_characters = function(surface, force)
-  return data.characters[surface.index] and data.characters[surface.index][force.index]
+  local characters = data.characters[surface.index] and data.characters[surface.index][force.index]
+  for k, character in pairs (characters) do
+    if not character.valid then
+      characters[k] = nil
+    end
+  end
+  return characters
 end
 
 local abs = math.abs
@@ -126,9 +156,7 @@ local get_characters_in_distance = function(entity, force)
   local origin = entity.position
   local characters = {}
   for k, character in pairs (all_characters) do
-    if not character.valid then
-      all_characters[k] = nil
-    elseif character.allow_dispatching_robots and character.get_item_count(names.units.construction_drone) > 0 and rect_dist(origin, character.position) <= drone_range then
+    if character.allow_dispatching_robots and character.get_item_count(names.units.construction_drone) > 0 and rect_dist(origin, character.position) <= drone_range then
       characters[character.unit_number] = character
     end
   end
@@ -140,7 +168,7 @@ local get_drone_radius = function()
 end
 
 local print = function(string)
-  --if not data.debug then return end
+  if not data.debug then return end
   local tick = game.tick
   log(tick.." | "..string)
   game.print(tick.." | "..string)
@@ -523,7 +551,9 @@ local check_priority_list = function(list, other_list, check_function, count)
     if index == nil then break end
     other_list[index] = entry
     list[index] = nil
-    check_function(entry)
+    if check_function(entry) then
+      other_list[index] = nil
+    end
     count = count - 1
   end
   return count
@@ -609,7 +639,7 @@ end
 local process_return_to_character_command
 
 local set_drone_order = function(drone, drone_data)
-  drone.ai_settings.path_resolution_modifier = -1
+  drone.ai_settings.path_resolution_modifier = 0
   drone.ai_settings.do_separation = true
   data.drone_commands[drone.unit_number] = drone_data
   drone_data.entity = drone
@@ -622,18 +652,31 @@ local set_drone_order = function(drone, drone_data)
   return process_drone_command(drone_data)
 end
 
+local find_a_character = function(drone_data)
+  if drone_data.character and drone_data.character.valid then return true end
+  local entity = drone_data.entity
+  if not (entity and entity.valid) then return end
+  local characters = get_characters(entity.surface, entity.force)
+  if not next(characters) then
+    return
+  end
+  drone_data.character = entity.surface.get_closest(entity.position, characters)
+  return true
+end
+
 local set_drone_idle = function(drone)
   if not (drone and drone.valid) then return end
   print("Setting drone idle")
   local drone_data = data.drone_commands[drone.unit_number]
 
+
   if drone_data then
-    if drone_data.character then
+    if find_a_character(drone_data) then
       process_return_to_character_command(drone_data)
       return
+    else
+      return drone_wait(drone_data, random(200, 400))
     end
-    find_a_character(drone_data)
-    return
   end
 
   set_drone_order(drone, {})
@@ -654,7 +697,7 @@ local check_ghost = function(entity)
     return
   end
 
-  print("Checking ghost "..entity.ghost_name..math.random())
+  print("Checking ghost "..entity.ghost_name..random())
 
   local drone = make_character_drone(character)
 
@@ -706,6 +749,10 @@ local on_built_entity = function(event)
   if entity_type == tile_ghost_type then
     data.tiles_to_be_checked[entity.unit_number] = entity
     return
+  end
+
+  if entity_type == "character" then
+    add_character(entity)
   end
 
   local bounding_box = entity.bounding_box or entity.selection_box
@@ -1190,6 +1237,18 @@ local cancel_extra_targets = function(drone_data)
 
 end
 
+local drone_wait = function(drone_data, ticks)
+  local drone = drone_data.entity
+  if not (drone and drone.valid) then return end
+  drone.set_command
+  {
+    type = defines.command.stop,
+    ticks_to_wait = ticks,
+    distraction = defines.distraction.none,
+    radius = get_radius(drone)
+  }
+end
+
 local cancel_drone_order = function(drone_data, on_removed)
   local drone = drone_data.entity
   if not (drone and drone.valid) then return end
@@ -1235,6 +1294,10 @@ local cancel_drone_order = function(drone_data, on_removed)
   drone_data.order = nil
   drone_data.target = nil
 
+  if not find_a_character(drone_data) then
+    return drone_wait(drone_data, random(200, 300))
+  end
+
   local stack = get_drone_first_stack(drone_data)
   if stack then
     if not on_removed then
@@ -1267,19 +1330,6 @@ local cancel_target_data = function(unit_number)
 end
 
 local floor = math.floor
-local random = math.random
-
-local drone_wait = function(drone_data, ticks)
-  local drone = drone_data.entity
-  if not (drone and drone.valid) then return end
-  drone.set_command
-  {
-    type = defines.command.stop,
-    ticks_to_wait = ticks,
-    distraction = defines.distraction.none,
-    radius = get_radius(drone)
-  }
-end
 
 local move_to_order_target = function(drone_data, target, range)
   local drone = drone_data.entity
@@ -1393,7 +1443,7 @@ local process_pickup_command = function(drone_data)
 
   local chest = drone_data.character
   if not (chest and chest.valid) then
-    print("Chest for pickup was not valid")
+    print("Character for pickup was not valid")
     return cancel_drone_order(drone_data)
   end
 
@@ -1403,6 +1453,7 @@ local process_pickup_command = function(drone_data)
 
 
   print("Pickup chest in range, picking up item")
+
   local stack = drone_data.pickup.stack
   local drone_inventory = get_drone_inventory(drone_data)
 
@@ -1412,25 +1463,8 @@ local process_pickup_command = function(drone_data)
 
   drone_data.pickup = nil
 
-  if chest == drone_data.character then
-    --make picking up from player instant.
-    return process_drone_command(drone_data)
-  end
+  return process_drone_command(drone_data)
 
-
-  local drone = drone_data.entity
-  local build_time = get_build_time(drone_data)
-  drone.surface.create_entity
-  {
-    name = beams.pickup,
-    source = chest,
-    target = drone,
-    position = drone.position,
-    force = drone.force,
-    duration = build_time,
-    source_offset = beam_offset
-  }
-  return drone_wait(drone_data, build_time)
 end
 
 local get_dropoff_stack = function(drone_data)
@@ -1439,27 +1473,13 @@ local get_dropoff_stack = function(drone_data)
   return get_drone_first_stack(drone_data)
 end
 
-local find_a_character = function(drone_data)
-  if drone_data.character and drone_data.character.valid then return end
-  local entity = drone_data.entity
-  if not (entity and entity.valid) then return end
-  local characters = get_characters(entity.surface, entity.force)
-  if not next(characters) then
-    entity.destroy()
-    return
-  end
-  drone_data.character = entity.surface.get_closest(entity.position, characters)
-  process_drone_command(drone_data)
-end
-
 local process_dropoff_command = function(drone_data)
 
   local drone = drone_data.entity
   print("Procesing dropoff command. "..drone.unit_number)
 
   if drone_data.character then
-    process_return_to_character_command(drone_data)
-    return
+    return process_return_to_character_command(drone_data)
   end
 
   find_a_character(drone_data)
@@ -1468,7 +1488,7 @@ end
 
 local unit_move_away = function(unit, target, multiplier)
   local multiplier = multiplier or 1
-  local r = (get_radius(target) + get_radius(unit)) * (1 + (math.random() * 4))
+  local r = (get_radius(target) + get_radius(unit)) * (1 + (random() * 4))
   r = r * multiplier
   local position = {x = nil, y = nil}
   if unit.position.x > target.position.x then
@@ -1481,7 +1501,7 @@ local unit_move_away = function(unit, target, multiplier)
   else
     position.y = unit.position.y - r
   end
-  unit.speed = unit.prototype.speed * (0.95 + (math.random() / 10))
+  unit.speed = unit.prototype.speed * (0.95 + (random() / 10))
   unit.set_command
   {
     type = defines.command.go_to_location,
@@ -1532,12 +1552,13 @@ local get_extra_target = function(drone_data)
   end
 end
 
+
 local revive_param = {return_item_request_proxy = true, raise_revive = true}
 local process_construct_command = function(drone_data)
   print("Processing construct command")
   local target = drone_data.target
   if not (target and target.valid) then
-    return process_return_to_character_command(drone_data)
+    return cancel_drone_order(drone_data)
   end
 
   local drone_inventory = get_drone_inventory(drone_data)
@@ -1578,6 +1599,8 @@ local process_construct_command = function(drone_data)
   drone_data.target = get_extra_target(drone_data)
 
   local build_time = get_build_time(drone_data)
+  local orientation, offset = get_beam_orientation(drone.position, entity.position)
+  drone.orientation = orientation
   drone.surface.create_entity
   {
     name = beams.build,
@@ -1586,22 +1609,19 @@ local process_construct_command = function(drone_data)
     position = drone.position,
     force = drone.force,
     duration = build_time,
-    source_offset = beam_offset
+    source_offset = offset
   }
   return drone_wait(drone_data, build_time)
 end
 
-local random = math.random
-local randish = function(value, variance)
-  return value + ((random() - 0.5) * variance * 2)
-end
-
 local process_failed_command = function(drone_data)
-  local drone = drone_data.entity
+  --game.speed = 0.1
 
+  local drone = drone_data.entity
+  --print(drone.ai_settings.path_resolution_modifier)
   --Sometimes they just fail for unrelated reasons, lets give them a few chances
   drone_data.fail_count = (drone_data.fail_count or 0) + 1
-  drone.ai_settings.path_resolution_modifier = math.min(3, drone.ai_settings.path_resolution_modifier + 1)
+  drone.ai_settings.path_resolution_modifier = math.min(4, drone.ai_settings.path_resolution_modifier + 1)
   --game.print("Set resolution: "..drone.ai_settings.path_resolution_modifier)
   if drone_data.fail_count < 10 then
     return drone_wait(drone_data, 10)
@@ -1649,6 +1669,8 @@ local process_deconstruct_command = function(drone_data)
   local drone = drone_data.entity
   if not drone_data.beam then
     local build_time = get_build_time(drone_data)
+    local orientation, offset = get_beam_orientation(drone.position, target.position)
+    drone.orientation = orientation
     drone_data.beam = drone.surface.create_entity
     {
       name = beams.deconstruction,
@@ -1657,7 +1679,7 @@ local process_deconstruct_command = function(drone_data)
       position = drone.position,
       force = drone.force,
       duration = build_time,
-      source_offset = beam_offset
+      source_offset = offset
     }
     return drone_wait(drone_data, build_time)
   else
@@ -1746,6 +1768,8 @@ local process_repair_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
+  local orientation, offset = get_beam_orientation(drone.position, target.position)
+  drone.orientation = orientation
   drone.surface.create_entity
   {
     name = beams.build,
@@ -1754,7 +1778,7 @@ local process_repair_command = function(drone_data)
     position = drone.position,
     force = drone.force,
     duration = ticks_to_repair,
-    source_offset = beam_offset
+    source_offset = offset
   }
 
   return drone_wait(drone_data, ticks_to_repair)
@@ -1833,6 +1857,8 @@ local process_upgrade_command = function(drone_data)
   update_drone_sticker(drone_data)
   local drone = drone_data.entity
   local build_time = get_build_time(drone_data)
+  local orientation, offset = get_beam_orientation(drone.position, upgraded.position)
+  drone.orientation = orientation
   drone.surface.create_entity
   {
     name = beams.build,
@@ -1841,7 +1867,7 @@ local process_upgrade_command = function(drone_data)
     position = drone.position,
     force = drone.force,
     duration = build_time,
-    source_offset = beam_offset
+    source_offset = offset
   }
   return drone_wait(drone_data, build_time)
 end
@@ -1904,15 +1930,17 @@ local process_request_proxy_command = function(drone_data)
   end
 
   local build_time = get_build_time(drone_data)
+  local orientation, offset = get_beam_orientation(drone.position, position)
+  drone.orientation = orientation
   drone.surface.create_entity
   {
-    name = beams.pickup,
+    name = beams.build,
     source = drone,
     target_position = position,
     position = drone.position,
     force = drone.force,
     duration = build_time,
-    source_offset = beam_offset
+    source_offset = offset
   }
 
   update_drone_sticker(drone_data)
@@ -1967,6 +1995,8 @@ local process_construct_tile_command = function(drone_data)
   drone_data.target = get_extra_target(drone_data)
 
   local build_time = get_build_time(drone_data)
+  local orientation, offset = get_beam_orientation(drone.position, position)
+  drone.orientation = orientation
   drone.surface.create_entity
   {
     name = beams.build,
@@ -1975,7 +2005,7 @@ local process_construct_tile_command = function(drone_data)
     position = drone.position,
     force = drone.force,
     duration = build_time,
-    source_offset = beam_offset
+    source_offset = offset
   }
   return drone_wait(drone_data, build_time)
 end
@@ -1999,6 +2029,8 @@ local process_deconstruct_tile_command = function(drone_data)
   local surface = target.surface
   if not drone_data.beam then
     local build_time = get_build_time(drone_data)
+    local orientation, offset = get_beam_orientation(drone.position, position)
+    drone.orientation = orientation
     surface.create_entity
     {
       name = beams.deconstruction,
@@ -2007,7 +2039,7 @@ local process_deconstruct_tile_command = function(drone_data)
       position = drone.position,
       force = drone.force,
       duration = build_time,
-      source_offset = beam_offset
+      source_offset = offset
     }
     drone_data.beam = true
     return drone_wait(drone_data, build_time)
@@ -2063,6 +2095,8 @@ local process_deconstruct_cliff_command = function(drone_data)
   if not drone_data.beam then
     local drone = drone_data.entity
     local build_time = get_build_time(drone_data)
+    local orientation, offset = get_beam_orientation(drone.position, target.position)
+    drone.orientation = orientation
     drone.surface.create_entity
     {
       name = beams.deconstruction,
@@ -2071,7 +2105,7 @@ local process_deconstruct_cliff_command = function(drone_data)
       position = drone.position,
       force = drone.force,
       duration = build_time,
-      source_offset = beam_offset
+      source_offset = offset
     }
     drone_data.beam = true
     return drone_wait(drone_data, build_time)
@@ -2117,12 +2151,12 @@ process_return_to_character_command = function(drone_data)
   transfer_inventory(inventory, target)
 
   if not inventory.is_empty() then
-    drone_wait(drone_data, math.random(18, 24))
+    drone_wait(drone_data, random(18, 24))
     return
   end
 
   if target.insert({name = names.units.construction_drone, count = 1}) == 0 then
-    drone_wait(drone_data, math.random(18, 24))
+    drone_wait(drone_data, random(18, 24))
     return
   end
 
