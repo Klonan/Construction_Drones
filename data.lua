@@ -4,7 +4,12 @@ names = require("shared")
 require "data/units/units"
 require "data/entities/entities"
 
---data.raw["character"]["character"].collision_mask = util.ground_unit_collision_mask()
 local mask = data.raw["character"]["character"].collision_mask
-table.insert(mask, "not-colliding-with-itself")
+if mask then
+  table.insert(mask, "not-colliding-with-itself")
+else
+  mask = util.ground_unit_collision_mask()
+  data.raw["character"]["character"].collision_mask = mask
+end
+
 data.raw.unit[names.units.construction_drone].collision_mask = mask
