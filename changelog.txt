@@ -1,0 +1,12 @@
+---------------------------------------------------------------------------------------------------
+Version: 0.2.1
+Date: 2019-09-10
+  Changes:
+    - Removed 'shoo' hotkey.
+    - Fixed drones blocking movement with Hovercraft mod installed.
+---------------------------------------------------------------------------------------------------
+Version: 0.2.0
+Date: 2019-09-07
+  Changes:
+    - Made construction drones only work like personal robots.
+    - Removed a ton of junk related to that, like the logistic beacons etc.
