@@ -2381,7 +2381,7 @@ local events =
   [defines.events.on_post_entity_died] = on_built_entity,
   [defines.events.on_entity_damaged] = on_entity_damaged,
   [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
-  [names.hotkeys.shoo]  = shoo
+  --[names.hotkeys.shoo]  = shoo
 }
 
 local register_events = function()
