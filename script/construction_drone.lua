@@ -17,22 +17,9 @@ drone_prototypes =
   },
 }
 
-local abs = math.abs
---Assumes position will be between -1000000 and 1000000
-local position_hash = function(position)
-  local x = position.x
-  local y = position.y
-  if x < 0 then
-    x = -x * 2 - 1
-  else
-    x = x * 2
-  end
-  if y < 0 then
-    y = -y * 2 - 1
-  else
-    y = y * 2
-  end
-  return (x * 1000000) + y
+local unique_index = function(entity)
+  if entity.unit_number then return entity.unit_number end
+  return entity.surface.index..entity.name..entity.position.x..entity.position.y
 end
 
 local is_commandable = function(string)
@@ -87,7 +74,8 @@ local data =
   sent_deconstruction = {},
   debug = false,
   proxy_chests = {},
-  characters = {}
+  characters = {},
+  migrate_deconstructs = true
 }
 
 local sin, cos = math.sin, math.cos
@@ -115,6 +103,7 @@ local get_beam_orientation = function(source_position, target_position)
 end
 
 local add_character = function(character)
+  if not (character and character.valid) then return end
   local characters = data.characters
 
   local surface_characters = characters[character.surface.index]
@@ -136,9 +125,9 @@ local add_character = function(character)
 end
 
 local get_characters = function(surface, force)
-  local characters = data.characters[surface.index] and data.characters[surface.index][force.index]
+  local characters = data.characters[surface.index] and data.characters[surface.index][force.index] or {}
   for k, character in pairs (characters) do
-    if not character.valid then
+    if not (character.valid and character.surface == surface) then
       characters[k] = nil
     end
   end
@@ -653,9 +642,9 @@ local set_drone_order = function(drone, drone_data)
 end
 
 local find_a_character = function(drone_data)
-  if drone_data.character and drone_data.character.valid then return true end
   local entity = drone_data.entity
   if not (entity and entity.valid) then return end
+  if drone_data.character and drone_data.character.valid and drone_data.character.surface == entity.surface then return true end
   local characters = get_characters(entity.surface, entity.force)
   if not next(characters) then
     return
@@ -760,7 +749,6 @@ local on_built_entity = function(event)
   for k, proxy in pairs (proxies) do
     if proxy.proxy_target == entity then
       insert(data.proxies_to_be_checked, proxy)
-      break
     end
   end
 
@@ -940,13 +928,16 @@ local check_deconstruction = function(deconstruct)
 
   local characters = get_characters_in_distance(entity, force)
 
-  if not next(characters) then return end
+  if not next(characters) then
+    --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "no characters"}
+    return
+  end
 
   local position = entity.position
 
   local character = surface.get_closest(position, characters)
 
-  local index = position_hash(position)
+  local index = unique_index(entity)
   local sent = data.sent_deconstruction[index] or 0
 
   local capacity = get_drone_stack_capacity(force)
@@ -968,7 +959,7 @@ local check_deconstruction = function(deconstruct)
     local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, area = area}) do
       if count <= 0 then break end
-      local nearby_index = position_hash(nearby.position)
+      local nearby_index = unique_index(nearby)
       local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
       if should_check then
         extra_targets[nearby_index] = nearby
@@ -979,7 +970,7 @@ local check_deconstruction = function(deconstruct)
     end
     local target = surface.get_closest(drone.position, extra_targets)
     if not target then return end
-    extra_targets[position_hash(target.position)] = nil
+    extra_targets[unique_index(target)] = nil
     local drone_data =
     {
       character = character,
@@ -1035,7 +1026,7 @@ local check_tile_deconstruction = function(entity)
   local radius = 2
   local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
   for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, area = area}) do
-    local nearby_index = position_hash(nearby.position)
+    local nearby_index = unique_index(nearby)
     local should_check = data.deconstruction_proxies_to_be_checked[nearby_index]
     if should_check then
       extra_targets[nearby_index] = nearby
@@ -1044,7 +1035,7 @@ local check_tile_deconstruction = function(entity)
     end
   end
   local target = surface.get_closest(drone.position, extra_targets)
-  extra_targets[position_hash(target.position)] = nil
+  extra_targets[unique_index(target)] = nil
 
   local drone_data =
   {
@@ -1228,7 +1219,7 @@ local cancel_extra_targets = function(drone_data)
 
   if order == drone_orders.deconstruct then
     for index, entity in pairs (targets) do
-      local index = position_hash(entity.position)
+      local index = unique_index(entity)
       data.deconstructs_to_be_checked[index] = {entity = entity, force = drone_data.entity.force}
       data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
     end
@@ -1272,7 +1263,7 @@ local cancel_drone_order = function(drone_data, on_removed)
     if order == drone_orders.request_proxy then
       insert(data.proxies_to_be_checked, target)
     elseif order == drone_orders.repair then
-      insert(data.repair_to_be_checked, target)
+      data.repair_to_be_checked[target_unit_number] = target
     elseif order == drone_orders.upgrade then
       data.upgrade_to_be_checked[target_unit_number] = {entity = target, upgrade_prototype = drone_data.upgrade_prototype}
     elseif order == drone_orders.construct then
@@ -1280,7 +1271,7 @@ local cancel_drone_order = function(drone_data, on_removed)
     elseif order == drone_orders.tile_construct then
       data.tiles_to_be_checked[target_unit_number] = target
     elseif order == drone_orders.deconstruct then
-      local index = position_hash(target.position)
+      local index = unique_index(target)
       data.deconstructs_to_be_checked[index] = {entity = target, force = drone.force}
       data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
     end
@@ -1295,7 +1286,7 @@ local cancel_drone_order = function(drone_data, on_removed)
   drone_data.target = nil
 
   if not find_a_character(drone_data) then
-    return drone_wait(drone_data, random(200, 300))
+    return drone_wait(drone_data, random(30, 300))
   end
 
   local stack = get_drone_first_stack(drone_data)
@@ -1332,7 +1323,16 @@ end
 local floor = math.floor
 
 local move_to_order_target = function(drone_data, target, range)
+
+
   local drone = drone_data.entity
+
+  if drone.surface ~= target.surface then
+    cancel_drone_order(drone_data)
+    return
+  end
+
+
 
   if in_construction_range(drone, target, range) then
     return true
@@ -1547,7 +1547,7 @@ local get_extra_target = function(drone_data)
   local next_target = drone_data.entity.surface.get_closest(drone_data.entity.position, drone_data.extra_targets)
   if next_target then
     drone_data.target = next_target
-    drone_data.extra_targets[next_target.unit_number or position_hash(next_target.position)] = nil
+    drone_data.extra_targets[unique_index(next_target)] = nil
     return next_target
   end
 end
@@ -1663,7 +1663,7 @@ local process_deconstruct_command = function(drone_data)
 
   local drone_inventory = get_drone_inventory(drone_data)
 
-  local index = position_hash(target.position)
+  local index = unique_index(target)
   local unit_number = target.unit_number
 
   local drone = drone_data.entity
@@ -2301,9 +2301,9 @@ local on_marked_for_deconstruction = function(event)
   if not (entity and entity.valid) then return end
   local type = entity.type
   if type == tile_deconstruction_proxy then
-    data.deconstruction_proxies_to_be_checked[position_hash(entity.position)] = entity
+    data.deconstruction_proxies_to_be_checked[unique_index(entity)] = entity
   else
-    data.deconstructs_to_be_checked[position_hash(entity.position)] = {entity = entity, force = force}
+    data.deconstructs_to_be_checked[unique_index(entity)] = {entity = entity, force = force}
   end
 end
 
@@ -2363,6 +2363,69 @@ local on_player_created = function(event)
   end
 end
 
+local on_entity_cloned = function(event)
+
+  local destination = event.destination
+  if not (destination and destination.valid) then return end
+
+  local source = event.source
+  if not (source and source.valid) then return end
+
+  if destination.type == "unit" then
+    local unit_number = source.unit_number
+    if not unit_number then return end
+
+    local drone_data = data.drone_commands[unit_number]
+    if not drone_data then return end
+
+    local new_data = util.copy(drone_data)
+    set_drone_order(destination, new_data)
+    return
+  end
+
+  if destination.to_be_deconstructed(destination.force) then
+    data.deconstructs_to_be_checked_again[unique_index(destination)] = {entity = destination, force = destination.force}
+    data.sent_deconstruction[unique_index(destination)] = 0
+  end
+
+  if destination.type == tile_deconstruction_proxy then
+    data.deconstruction_proxies_to_be_checked[unique_index(destination)] = destination
+  end
+
+  if destination.to_be_upgraded() then
+    data.upgrade_to_be_checked[destination.unit_number] = destination
+  end
+
+  if destination.type == proxy_type then
+    insert(data.proxies_to_be_checked, destination)
+  end
+
+  on_built_entity{created_entity = destination}
+
+
+end
+
+local on_forces_merged = function(event)
+  local index = event.source_index
+
+  for k, surface in pairs (game.surfaces) do
+    for k, character in pairs(data.characters[surface.index][index] or {}) do
+      add_character(character)
+    end
+    data.characters[surface.index][index] = nil
+  end
+
+
+end
+
+local on_player_changed_surface = function(event)
+  local player = game.get_player(event.player_index)
+  if not (player and player.valid) then return end
+  add_character(player.character)
+  game.print("HII")
+end
+
+
 local lib = {}
 
 local events =
@@ -2381,6 +2444,9 @@ local events =
   [defines.events.on_post_entity_died] = on_built_entity,
   [defines.events.on_entity_damaged] = on_entity_damaged,
   [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
+  [defines.events.on_entity_cloned] = on_entity_cloned,
+  [defines.events.on_forces_merged] = on_forces_merged,
+  [defines.events.on_player_changed_surface] = on_player_changed_surface,
   --[names.hotkeys.shoo]  = shoo
 }
 
@@ -2434,6 +2500,23 @@ lib.on_configuration_changed = function()
         set_drone_idle(drone)
       end
     end
+  end
+
+  if not data.migrate_deconstructs then
+    data.migrate_deconstructs = true
+    local new_check = {}
+    for k, to_check in pairs (data.deconstructs_to_be_checked) do
+      if to_check.entity.valid then
+        new_check[unique_index(to_check.entity)] = to_check
+      end
+    end
+    for k, to_check in pairs (data.deconstructs_to_be_checked_again) do
+      if to_check.entity.valid then
+        new_check[unique_index(to_check.entity)] = to_check
+      end
+    end
+    data.deconstructs_to_be_checked = new_check
+    data.deconstructs_to_be_checked_again = {}
   end
 
 end
