@@ -2427,19 +2427,6 @@ local on_entity_cloned = function(event)
 
 end
 
-local on_forces_merged = function(event)
-  local index = event.source_index
-
-  for k, surface in pairs (game.surfaces) do
-    for k, character in pairs(data.characters[surface.index][index] or {}) do
-      add_character(character)
-    end
-    data.characters[surface.index][index] = nil
-  end
-
-
-end
-
 local on_player_changed_surface = function(event)
   local player = game.get_player(event.player_index)
   if not (player and player.valid) then return end
@@ -2467,7 +2454,6 @@ local events =
   [defines.events.on_entity_damaged] = on_entity_damaged,
   [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
   [defines.events.on_entity_cloned] = on_entity_cloned,
-  [defines.events.on_forces_merged] = on_forces_merged,
   [defines.events.on_player_changed_surface] = on_player_changed_surface,
   --[names.hotkeys.shoo]  = shoo
 }
