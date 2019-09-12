@@ -2264,7 +2264,7 @@ process_drone_command = function(drone_data, result)
     return process_return_to_character_command(drone_data)
   end
 
-  game.print("Nothin")
+  --game.print("Nothin")
   return set_drone_idle(drone)
 end
 
@@ -2431,7 +2431,6 @@ local on_player_changed_surface = function(event)
   local player = game.get_player(event.player_index)
   if not (player and player.valid) then return end
   add_character(player.character)
-  game.print("HII")
 end
 
 
