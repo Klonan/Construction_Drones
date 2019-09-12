@@ -75,7 +75,9 @@ local data =
   debug = false,
   proxy_chests = {},
   characters = {},
-  migrate_deconstructs = true
+  migrate_deconstructs = true,
+  migrate_characters = true
+
 }
 
 local sin, cos = math.sin, math.cos
@@ -104,34 +106,30 @@ end
 
 local add_character = function(character)
   if not (character and character.valid) then return end
-  local characters = data.characters
-
-  local surface_characters = characters[character.surface.index]
-
-  if not surface_characters then
-    surface_characters = {}
-    characters[character.surface.index] = surface_characters
-  end
-
-  local force_characters = surface_characters[character.force.index]
-
-  if not force_characters then
-    force_characters = {}
-    surface_characters[character.force.index] = force_characters
-  end
-
-  force_characters[character.unit_number] = character
-
+  data.characters[unique_index(character)] = character
 end
 
-local get_characters = function(surface, force)
-  local characters = data.characters[surface.index] and data.characters[surface.index][force.index] or {}
+local get_characters = function()
+  local characters = data.characters
   for k, character in pairs (characters) do
-    if not (character.valid and character.surface == surface) then
+    if not character.valid then
       characters[k] = nil
     end
   end
   return characters
+end
+
+local get_characters_for_entity = function(entity, optional_force)
+  --matches force and surface
+  local force = optional_force or entity.force
+  local surface = entity.surface
+  local new_characters = {}
+  for k, character in pairs (get_characters()) do
+    if character.force == force and character.surface == surface then
+      new_characters[k] = character
+    end
+  end
+  return new_characters
 end
 
 local abs = math.abs
@@ -140,16 +138,32 @@ local rect_dist = function(position_1, position_2)
   return abs(position_1.x - position_2.x) + abs(position_1.y - position_2.y)
 end
 
-local get_characters_in_distance = function(entity, force)
-  local all_characters = get_characters(entity.surface, force or entity.force)
+local get_characters_in_distance = function(entity, optional_force)
   local origin = entity.position
-  local characters = {}
-  for k, character in pairs (all_characters) do
-    if character.allow_dispatching_robots and character.get_item_count(names.units.construction_drone) > 0 and rect_dist(origin, character.position) <= drone_range then
-      characters[character.unit_number] = character
+  local rect_dist = rect_dist
+  local characters = get_characters_for_entity(entity)
+  for k, character in pairs (characters) do
+    if (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) or (rect_dist(origin, character.position) > drone_range) then
+      characters[k] = nil
     end
   end
   return characters
+end
+
+local get_character_for_job = function(entity, optional_force)
+  local characters = get_characters_for_entity(entity, optional_force)
+  for k, character in pairs (characters) do
+    if (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) then
+      characters[k] = nil
+    end
+  end
+
+  if not next(characters) then return end
+
+  local closest = entity.surface.get_closest(entity.position, characters)
+  if rect_dist(closest.position, entity.position) > drone_range then return end
+
+  return closest
 end
 
 local get_drone_radius = function()
@@ -621,6 +635,8 @@ local make_character_drone = function(character)
     target = drone,
     target_offset = {0, -0.5},
     surface = drone.surface,
+    minimum_darkness = 0.3,
+    intensity = 0.6,
   }
   return drone
 end
@@ -645,7 +661,7 @@ local find_a_character = function(drone_data)
   local entity = drone_data.entity
   if not (entity and entity.valid) then return end
   if drone_data.character and drone_data.character.valid and drone_data.character.surface == entity.surface then return true end
-  local characters = get_characters(entity.surface, entity.force)
+  local characters = get_characters_for_entity(entity)
   if not next(characters) then
     return
   end
@@ -686,7 +702,7 @@ local check_ghost = function(entity)
     return
   end
 
-  print("Checking ghost "..entity.ghost_name..random())
+  --print("Checking ghost "..entity.ghost_name..random())
 
   local drone = make_character_drone(character)
 
@@ -744,8 +760,7 @@ local on_built_entity = function(event)
     add_character(entity)
   end
 
-  local bounding_box = entity.bounding_box or entity.selection_box
-  local proxies = entity.surface.find_entities_filtered{area = bounding_box, type = proxy_type}
+  local proxies = entity.surface.find_entities_filtered{position = entity.position, type = proxy_type}
   for k, proxy in pairs (proxies) do
     if proxy.proxy_target == entity then
       insert(data.proxies_to_be_checked, proxy)
@@ -920,22 +935,14 @@ local check_deconstruction = function(deconstruct)
 
   local surface = entity.surface
 
-  local mineable_properties = entity.prototype.mineable_properties
+  --[[local mineable_properties = entity.prototype.mineable_properties
   if not mineable_properties.minable then
     print("Why are you marked for deconstruction if I cant mine you?")
     return
-  end
+  end]]
 
-  local characters = get_characters_in_distance(entity, force)
-
-  if not next(characters) then
-    --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "no characters"}
-    return
-  end
-
-  local position = entity.position
-
-  local character = surface.get_closest(position, characters)
+  local character = get_character_for_job(entity, force)
+  if not character then return end
 
   local index = unique_index(entity)
   local sent = data.sent_deconstruction[index] or 0
@@ -952,9 +959,11 @@ local check_deconstruction = function(deconstruct)
 
 
   if needed == 1 then
+
+    local position = entity.position
     local drone = make_character_drone(character)
     local extra_targets = {}
-    local radius = 4
+    local radius = 5
     local count = 6
     local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, area = area}) do
@@ -968,6 +977,7 @@ local check_deconstruction = function(deconstruct)
         count = count - 1
       end
     end
+
     local target = surface.get_closest(drone.position, extra_targets)
     if not target then return end
     extra_targets[unique_index(target)] = nil
@@ -979,6 +989,7 @@ local check_deconstruction = function(deconstruct)
       extra_targets = extra_targets
     }
     return set_drone_order(drone, drone_data)
+
   end
 
   for k = 1, math.min(needed, 10, character.get_item_count(names.units.construction_drone)) do
@@ -1012,13 +1023,8 @@ local check_tile_deconstruction = function(entity)
 
   --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
 
-  local characters = get_characters_in_distance(entity)
-
-  if not next(characters) then return end
-
-  local position = entity.position
-  local surface = entity.surface
-  local character = surface.get_closest(position, characters)
+  local character = get_character_for_job(entity)
+  if not character then return end
 
   local drone = make_character_drone(character)
 
@@ -1091,8 +1097,8 @@ local check_repair = function(entity)
     end
   end
 
-
   if not selected_character then return end
+
   local drone = make_character_drone(selected_character)
 
   local drone_data =
@@ -1171,19 +1177,35 @@ end
 
 local on_tick = function(event)
 
+  --local profiler = game.create_profiler()
+
   check_deconstruction_lists()
+  --game.print({"", game.tick, " deconstruction checks ", profiler})
+  --profiler.reset()
 
   check_ghost_lists()
+  --game.print({"", game.tick, " ghost checks ", profiler})
+  --profiler.reset()
 
   check_upgrade_lists()
+  --game.print({"", game.tick, " upgrade checks ", profiler})
+  --profiler.reset()
 
   check_repair_lists()
+  --game.print({"", game.tick, " repair checks ", profiler})
+  --profiler.reset()
 
   check_proxies_lists()
+  --game.print({"", game.tick, " proxy checks ", profiler})
+  --profiler.reset()
 
   check_tile_deconstruction_lists()
+  --game.print({"", game.tick, " tile decon checks ", profiler})
+  --profiler.reset()
 
   check_tile_lists()
+  --game.print({"", game.tick, " tile ghost checks ", profiler})
+  --profiler.reset()
 
 end
 
@@ -2517,6 +2539,11 @@ lib.on_configuration_changed = function()
     end
     data.deconstructs_to_be_checked = new_check
     data.deconstructs_to_be_checked_again = {}
+  end
+
+  if not data.migrate_characters then
+    data.migrate_characters = true
+    setup_characters()
   end
 
 end
