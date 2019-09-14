@@ -32,7 +32,7 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_checks_per_tick = 3
+local max_checks_per_tick = 1
 
 local drone_pathfind_flags =
 {
@@ -706,13 +706,11 @@ local check_ghost = function(entity)
 
   local drone = make_character_drone(character)
 
-  local radius = 5
-  local area = {{position.x - radius, position.y - radius}, {position.x + radius, position.y + radius}}
   local count = 0
   local extra_targets = {} --{[entity.unit_number] = entity}
-  local extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, area = area}
+  local extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, position = position, radius = 5}
   for k, ghost in pairs (extra) do
-    if count >= 6 then break end
+    if count >= 8 then break end
     local unit_number = ghost.unit_number
     local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
     if should_check then
@@ -797,10 +795,7 @@ local check_upgrade = function(upgrade_data)
   local count = 0
 
   local extra_targets = {}
-  local position = entity.position
-  local radius = 5
-  local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
-  for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, area = area}) do
+  for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8}) do
     if count >= 6 then break end
     local nearby_index = nearby.unit_number
     local should_check = data.upgrade_to_be_checked[nearby_index] or data.upgrade_to_be_checked_again[nearby_index]
@@ -960,13 +955,10 @@ local check_deconstruction = function(deconstruct)
 
   if needed == 1 then
 
-    local position = entity.position
     local drone = make_character_drone(character)
     local extra_targets = {}
-    local radius = 5
-    local count = 6
-    local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
-    for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, area = area}) do
+    local count = 10
+    for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8}) do
       if count <= 0 then break end
       local nearby_index = unique_index(nearby)
       local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
@@ -1026,12 +1018,12 @@ local check_tile_deconstruction = function(entity)
   local character = get_character_for_job(entity)
   if not character then return end
 
+  local surface = entity.surface
+
   local drone = make_character_drone(character)
 
   local extra_targets = {}
-  local radius = 2
-  local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
-  for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, area = area}) do
+  for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, position = entity.position, radius = 3}) do
     local nearby_index = unique_index(nearby)
     local should_check = data.deconstruction_proxies_to_be_checked[nearby_index]
     if should_check then
@@ -1126,7 +1118,6 @@ local check_tile = function(entity)
 
   local force = entity.force
   local surface = entity.surface
-  local position = entity.position
   local ghost_name = entity.ghost_name
 
   local tile_prototype = game.tile_prototypes[ghost_name]
@@ -1139,11 +1130,9 @@ local check_tile = function(entity)
 
   local drone = make_character_drone(character)
 
-  local radius = 2
-  local area = {{position.x - radius, position.y - radius}, {position.x + radius, position.y + radius}}
   local count = 0
   local extra_targets = {}
-  local extra = surface.find_entities_filtered{type = tile_ghost_type, area = area}
+  local extra = surface.find_entities_filtered{type = tile_ghost_type, position = entity.position, radius = 3}
   for k, ghost in pairs (extra) do
     local unit_number = ghost.unit_number
     local should_check = data.tiles_to_be_checked[unit_number] and ghost.ghost_name == ghost_name
@@ -1600,8 +1589,7 @@ local process_construct_command = function(drone_data)
     drone_wait(drone_data, 30)
     print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
     local radius = get_radius(target)
-    local area = {{target.position.x - radius, target.position.y - radius},{target.position.x + radius, target.position.y + radius}}
-    for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", area = area}) do
+    for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", position = target.position, radius = radius}) do
       print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
       unit_clear_target(unit, target)
     end
@@ -2340,19 +2328,6 @@ local on_entity_damaged = function(event)
   data.repair_to_be_checked[unit_number] = entity
 end
 
-local shoo = function(event)
-  local player = game.players[event.player_index]
-  if not (player and player.valid) then return end
-  local radius = 16
-  local target = player.selected or player.character
-  local position = target and target.position or player.position
-  local area = {{position.x - radius, position.y - radius},{position.x + radius, position.y + radius}}
-  for k, unit in pairs(player.surface.find_entities_filtered{area = area, type = "unit", force = player.force}) do
-    unit_move_away(unit, target, 4)
-  end
-  player.surface.play_sound{path = "shoo", position = player.position}
-end
-
 local on_marked_for_upgrade = function(event)
   local entity = event.entity
   if not (entity and entity.valid) then return end
@@ -2453,8 +2428,7 @@ local events =
   [defines.events.on_entity_damaged] = on_entity_damaged,
   [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
   [defines.events.on_entity_cloned] = on_entity_cloned,
-  [defines.events.on_player_changed_surface] = on_player_changed_surface,
-  --[names.hotkeys.shoo]  = shoo
+  [defines.events.on_player_changed_surface] = on_player_changed_surface
 }
 
 local register_events = function()
