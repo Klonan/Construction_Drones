@@ -1,4 +1,12 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.3
+Date: 2019-09-14
+  Changes:
+    - Fixed script errors with multiple surfaces.
+    - Increased performance somehow.
+    - Increased area for the 'extra target' checks in a few places.
+    - Fixed collision issues with other mods, and tanks, trains.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.2
 Date: 2019-09-11
   Changes:
