@@ -1066,7 +1066,7 @@ end
 
 local check_repair = function(entity)
   if not (entity and entity.valid) then return true end
-  entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
   print("Checking repair of an entity: "..entity.name)
   if entity.has_flag("not-repairable") then return true end
 
