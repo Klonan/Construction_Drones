@@ -1066,6 +1066,7 @@ end
 
 local check_repair = function(entity)
   if not (entity and entity.valid) then return true end
+  entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
   print("Checking repair of an entity: "..entity.name)
   if entity.has_flag("not-repairable") then return true end
 
@@ -1089,7 +1090,9 @@ local check_repair = function(entity)
     end
   end
 
-  if not selected_character then return end
+  if not selected_character then
+    return
+  end
 
   local drone = make_character_drone(selected_character)
 
@@ -2463,16 +2466,9 @@ end
 
 lib.on_configuration_changed = function()
   game.map_settings.path_finder.use_path_cache = false
+
   if remote.interfaces["unit_control"] then
     remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
-  end
-
-
-  if not data.characters then
-    setup_characters()
-    for k, drone_data in pairs (data.drone_commands) do
-      find_a_character(drone_data)
-    end
   end
 
   if data.idle_drones then
@@ -2500,10 +2496,7 @@ lib.on_configuration_changed = function()
     data.deconstructs_to_be_checked_again = {}
   end
 
-  if not data.migrate_characters then
-    data.migrate_characters = true
-    setup_characters()
-  end
+  setup_characters()
 
 end
 
