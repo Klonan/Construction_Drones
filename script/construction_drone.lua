@@ -2438,7 +2438,7 @@ end
 local prune_commands = function()
   for unit_number, drone_data in pairs (data.drone_commands) do
     if not (drone_data.entity and drone_data.entity.valid) then
-      data.drone_commands[k] = nil
+      data.drone_commands[unit_number] = nil
       local proxy_chest = data.proxy_chests[unit_number]
       if proxy_chest then
         proxy_chest.destroy()
