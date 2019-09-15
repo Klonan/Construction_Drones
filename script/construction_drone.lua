@@ -143,7 +143,7 @@ local get_characters_in_distance = function(entity, optional_force)
   local rect_dist = rect_dist
   local characters = get_characters_for_entity(entity)
   for k, character in pairs (characters) do
-    if (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) or (rect_dist(origin, character.position) > drone_range) then
+    if character.vehicle or (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) or (rect_dist(origin, character.position) > drone_range) then
       characters[k] = nil
     end
   end
@@ -153,7 +153,7 @@ end
 local get_character_for_job = function(entity, optional_force)
   local characters = get_characters_for_entity(entity, optional_force)
   for k, character in pairs (characters) do
-    if (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) then
+    if character.vehicle or (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) then
       characters[k] = nil
     end
   end
@@ -626,7 +626,9 @@ local update_drone_sticker
 local process_drone_command
 
 local make_character_drone = function(character)
-  local drone = character.surface.create_entity{name = names.units.construction_drone, position = character.position, force = character.force}
+  local position = character.surface.find_non_colliding_position(names.units.construction_drone, character.position, 5, 0.5, false)
+  if not position then return end
+  local drone = character.surface.create_entity{name = names.units.construction_drone, position = position, force = character.force}
   character.remove_item({name = names.units.construction_drone, count = 1})
   rendering.draw_light
   {
@@ -705,6 +707,7 @@ local check_ghost = function(entity)
   --print("Checking ghost "..entity.ghost_name..random())
 
   local drone = make_character_drone(character)
+  if not drone then return end
 
   local count = 0
   local extra_targets = {} --{[entity.unit_number] = entity}
@@ -791,6 +794,7 @@ local check_upgrade = function(upgrade_data)
   if not character then return end
 
   local drone = make_character_drone(character)
+  if not drone then return end
 
   local count = 0
 
@@ -855,15 +859,17 @@ local check_proxy = function(entity)
     end
     if selected_character then
       local drone = make_character_drone(selected_character)
-      drone_data =
-      {
-        character = selected_character,
-        order = drone_orders.request_proxy,
-        pickup = {stack = {name = name, count = count}},
-        target = entity
-      }
-      set_drone_order(drone, drone_data)
-      sent = sent + 1
+      if drone then
+        drone_data =
+        {
+          character = selected_character,
+          order = drone_orders.request_proxy,
+          pickup = {stack = {name = name, count = count}},
+          target = entity
+        }
+        set_drone_order(drone, drone_data)
+        sent = sent + 1
+      end
     end
   end
   return needed == sent
@@ -901,6 +907,7 @@ local check_cliff_deconstruction = function(deconstruct)
   local character = surface.get_closest(position, characters)
 
   local drone = make_character_drone(character)
+  if not drone then return end
 
   local drone_data =
   {
@@ -956,6 +963,7 @@ local check_deconstruction = function(deconstruct)
   if needed == 1 then
 
     local drone = make_character_drone(character)
+    if not drone then return end
     local extra_targets = {}
     local count = 10
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8}) do
@@ -987,14 +995,16 @@ local check_deconstruction = function(deconstruct)
   for k = 1, math.min(needed, 10, character.get_item_count(names.units.construction_drone)) do
     if not (entity and entity.valid) then break end
     local drone = make_character_drone(character)
-    local drone_data =
-    {
-      character = character,
-      order = drone_orders.deconstruct,
-      target = entity
-    }
-    set_drone_order(drone, drone_data)
-    sent = sent + 1
+    if drone then
+      local drone_data =
+      {
+        character = character,
+        order = drone_orders.deconstruct,
+        target = entity
+      }
+      set_drone_order(drone, drone_data)
+      sent = sent + 1
+    end
   end
 
   data.sent_deconstruction[index] = sent
@@ -1021,6 +1031,7 @@ local check_tile_deconstruction = function(entity)
   local surface = entity.surface
 
   local drone = make_character_drone(character)
+  if not drone then return end
 
   local extra_targets = {}
   for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, position = entity.position, radius = 3}) do
@@ -1095,6 +1106,7 @@ local check_repair = function(entity)
   end
 
   local drone = make_character_drone(selected_character)
+  if not drone then return end
 
   local drone_data =
   {
@@ -1132,6 +1144,7 @@ local check_tile = function(entity)
   end
 
   local drone = make_character_drone(character)
+  if not drone then return end
 
   local count = 0
   local extra_targets = {}

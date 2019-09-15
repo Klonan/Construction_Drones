@@ -2,6 +2,7 @@ util = require "data/tf_util/tf_util"
 names = require("shared")
 
 --[[
+  ]]
 
   local mask = data.raw["character"]["character"].collision_mask
   if mask then
@@ -10,8 +11,8 @@ names = require("shared")
     mask = util.ground_unit_collision_mask()
     data.raw["character"]["character"].collision_mask = mask
   end
-  ]]
 
+--[[
 
 
   local drone_layer = "layer-14"
@@ -97,4 +98,5 @@ names = require("shared")
 
 
 
---data.raw.unit[names.units.construction_drone].collision_mask = {"object-layer", "not-colliding-with-itself"}
+  --data.raw.unit[names.units.construction_drone].collision_mask = {"object-layer", "not-colliding-with-itself"}
+  ]]
