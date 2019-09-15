@@ -1999,6 +1999,7 @@ local process_construct_tile_command = function(drone_data)
   local current_prototype = tile.prototype
   local products = current_prototype.mineable_properties.products
 
+  clear_target_data(target.unit_number)
   surface.set_tiles({{name = target.ghost_name, position = position}}, true)
 
   local drone_inventory = get_drone_inventory(drone_data)
@@ -2186,6 +2187,16 @@ process_return_to_character_command = function(drone_data)
     return
   end
 
+  cancel_drone_order(drone_data, true)
+
+  local unit_number = drone_data.entity.unit_number
+
+  local proxy_chest = data.proxy_chests[unit_number]
+  if proxy_chest then
+    proxy_chest.destroy()
+    data.proxy_chests[unit_number] = nil
+  end
+  data.drone_commands[unit_number] = nil
 
   drone_data.entity.destroy()
 
@@ -2424,6 +2435,19 @@ local on_player_changed_surface = function(event)
   add_character(player.character)
 end
 
+local prune_commands = function()
+  for unit_number, drone_data in pairs (data.drone_commands) do
+    if not (drone_data.entity and drone_data.entity.valid) then
+      data.drone_commands[k] = nil
+      local proxy_chest = data.proxy_chests[unit_number]
+      if proxy_chest then
+        proxy_chest.destroy()
+        data.proxy_chests[unit_number] = nil
+      end
+    end
+  end
+end
+
 
 local lib = {}
 
@@ -2510,6 +2534,7 @@ lib.on_configuration_changed = function()
   end
 
   setup_characters()
+  prune_commands()
 
 end
 
