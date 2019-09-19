@@ -32,7 +32,7 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_checks_per_tick = 1
+local max_checks_per_tick = 2
 
 local drone_pathfind_flags =
 {
@@ -743,7 +743,7 @@ local check_ghost = function(entity)
 end
 
 local on_built_entity = function(event)
-  local entity = event.created_entity or event.ghost
+  local entity = event.created_entity or event.ghost or event.entity
   if not (entity and entity.valid) then return end
   local entity_type = entity.type
 
@@ -1598,6 +1598,7 @@ local process_construct_command = function(drone_data)
   end
 
   local drone = drone_data.entity
+  local position = target.position
 
   local unit_number = target.unit_number
   local success, entity, proxy = target.revive(revive_param)
@@ -1605,7 +1606,7 @@ local process_construct_command = function(drone_data)
     drone_wait(drone_data, 30)
     print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
     local radius = get_radius(target)
-    for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", position = target.position, radius = radius}) do
+    for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", position = position, radius = radius}) do
       print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
       unit_clear_target(unit, target)
     end
@@ -1625,14 +1626,15 @@ local process_construct_command = function(drone_data)
   drone_data.target = get_extra_target(drone_data)
 
   local build_time = get_build_time(drone_data)
-  local orientation, offset = get_beam_orientation(drone.position, entity.position)
+  local orientation, offset = get_beam_orientation(drone.position, position)
   drone.orientation = orientation
   drone.surface.create_entity
   {
     name = beams.build,
     source = drone,
-    target = entity,
-    position = drone.position,
+    target = entity.valid and entity,
+    target_position = position,
+    position = position,
     force = drone.force,
     duration = build_time,
     source_offset = offset
@@ -2429,12 +2431,6 @@ local on_entity_cloned = function(event)
 
 end
 
-local on_player_changed_surface = function(event)
-  local player = game.get_player(event.player_index)
-  if not (player and player.valid) then return end
-  add_character(player.character)
-end
-
 local prune_commands = function()
   for unit_number, drone_data in pairs (data.drone_commands) do
     if not (drone_data.entity and drone_data.entity.valid) then
@@ -2453,22 +2449,28 @@ local lib = {}
 
 local events =
 {
-  [defines.events.on_built_entity] = on_built_entity,
   [defines.events.on_tick] = on_tick,
-  [defines.events.on_ai_command_completed] = on_ai_command_completed,
+
+  [defines.events.on_built_entity] = on_built_entity,
+  [defines.events.on_post_entity_died] = on_built_entity,
+  [defines.events.script_raised_built] = on_built_entity,
+
   [defines.events.on_entity_died] = on_entity_removed,
   [defines.events.on_robot_mined_entity] = on_entity_removed,
   [defines.events.on_player_mined_entity] = on_entity_removed,
+  [defines.events.on_pre_ghost_deconstructed] = on_entity_removed,
+
   [defines.events.on_player_created] = on_player_created,
   [defines.events.on_player_joined_game] = on_player_created,
   [defines.events.on_player_toggled_map_editor] = on_player_created,
+  [defines.events.on_player_respawned] = on_player_created,
+  [defines.events.on_player_changed_surface] = on_player_created
+
+  [defines.events.on_ai_command_completed] = on_ai_command_completed,
   [defines.events.on_marked_for_deconstruction] = on_marked_for_deconstruction,
-  [defines.events.on_pre_ghost_deconstructed] = on_entity_removed,
-  [defines.events.on_post_entity_died] = on_built_entity,
   [defines.events.on_entity_damaged] = on_entity_damaged,
   [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
   [defines.events.on_entity_cloned] = on_entity_cloned,
-  [defines.events.on_player_changed_surface] = on_player_changed_surface
 }
 
 local register_events = function()
