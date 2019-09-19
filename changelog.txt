@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.9
+Date: 2019-09-19
+  Changes:
+    - Fixed error building entities with some specific mods.
+    - Fixed drones not working after players respawning.
+    - Maybe made drones a bit more responsive.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.8
 Date: 2019-09-15
   Changes:
