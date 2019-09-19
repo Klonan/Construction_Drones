@@ -2464,7 +2464,7 @@ local events =
   [defines.events.on_player_joined_game] = on_player_created,
   [defines.events.on_player_toggled_map_editor] = on_player_created,
   [defines.events.on_player_respawned] = on_player_created,
-  [defines.events.on_player_changed_surface] = on_player_created
+  [defines.events.on_player_changed_surface] = on_player_created,
 
   [defines.events.on_ai_command_completed] = on_ai_command_completed,
   [defines.events.on_marked_for_deconstruction] = on_marked_for_deconstruction,
