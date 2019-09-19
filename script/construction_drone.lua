@@ -1836,7 +1836,8 @@ local process_upgrade_command = function(drone_data)
   local original_name = target.name
   local entity_type = target.type
   local unit_number = target.unit_number
-  local neighbor = target.type == "underground-belt" and target.neighbours
+  local neighbor = entity_type == "underground-belt" and target.neighbours
+  local type = entity_type == "underground-belt" and target.belt_to_ground_type or entity_type == "loader" and target.loader_type
 
   local upgraded = surface.create_entity
   {
@@ -1846,7 +1847,7 @@ local process_upgrade_command = function(drone_data)
     fast_replace = true,
     force = target.force,
     spill = false,
-    type = entity_type == "underground-belt" and target.belt_to_ground_type
+    type = type
   }
   if not upgraded then error("Shouldn't happen, upgrade failed when creating entity... let me know!") return end
 
@@ -1857,6 +1858,8 @@ local process_upgrade_command = function(drone_data)
   local products = game.entity_prototypes[original_name].mineable_properties.products
 
   take_product_stacks(drone_inventory, products)
+
+  local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type or neighbour.type == "loader" and neighbour.loader_type
 
   if neighbour and neighbour.valid then
     print("Upgrading neighbor")
@@ -1869,7 +1872,7 @@ local process_upgrade_command = function(drone_data)
       fast_replace = true,
       force = neighbour.force,
       spill = false,
-      type = entity_type == "underground-belt" and neighbour.belt_to_ground_type
+      type = type
     }
     clear_target_data(neighbor_unit_number)
     take_product_stacks(drone_inventory, products)
