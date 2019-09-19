@@ -1859,10 +1859,10 @@ local process_upgrade_command = function(drone_data)
 
   take_product_stacks(drone_inventory, products)
 
-  local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type or neighbour.type == "loader" and neighbour.loader_type
 
   if neighbour and neighbour.valid then
     print("Upgrading neighbor")
+    local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
     local neighbor_unit_number = neighbour.unit_number
     local upgraded_neighbour = surface.create_entity
     {
