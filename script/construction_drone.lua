@@ -1836,7 +1836,7 @@ local process_upgrade_command = function(drone_data)
   local original_name = target.name
   local entity_type = target.type
   local unit_number = target.unit_number
-  local neighbor = entity_type == "underground-belt" and target.neighbours
+  local neighbour = entity_type == "underground-belt" and target.neighbours
   local type = entity_type == "underground-belt" and target.belt_to_ground_type or entity_type == "loader" and target.loader_type
 
   local upgraded = surface.create_entity
@@ -1861,9 +1861,9 @@ local process_upgrade_command = function(drone_data)
 
 
   if neighbour and neighbour.valid then
-    print("Upgrading neighbor")
+    print("Upgrading neighbour")
     local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
-    local neighbor_unit_number = neighbour.unit_number
+    local neighbour_unit_number = neighbour.unit_number
     local upgraded_neighbour = surface.create_entity
     {
       name = prototype.name,
@@ -1874,7 +1874,7 @@ local process_upgrade_command = function(drone_data)
       spill = false,
       type = type
     }
-    clear_target_data(neighbor_unit_number)
+    clear_target_data(neighbour_unit_number)
     take_product_stacks(drone_inventory, products)
   end
 
