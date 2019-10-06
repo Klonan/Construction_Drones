@@ -840,6 +840,8 @@ local check_proxy = function(entity)
   local target = entity.proxy_target
   if not (target and target.valid) then print("Proxy target not valid") return true end
 
+  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+
   local items = entity.item_requests
   local force = entity.force
   local surface = entity.surface
@@ -1602,15 +1604,20 @@ local process_construct_command = function(drone_data)
 
   local unit_number = target.unit_number
   local success, entity, proxy = target.revive(revive_param)
-  if not success then
-    drone_wait(drone_data, 30)
-    print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
-    local radius = get_radius(target)
-    for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", position = position, radius = radius}) do
-      print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
-      unit_clear_target(unit, target)
+  if not (success and entity) then
+    if target.valid then
+      drone_wait(drone_data, 30)
+      print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
+      local radius = get_radius(target)
+      for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", position = position, radius = radius}) do
+        print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
+        unit_clear_target(unit, target)
+      end
+      return
+    else
+      --idk
+      return cancel_drone_order(drone_data)
     end
-    return
   end
 
 
@@ -1921,6 +1928,7 @@ local process_request_proxy_command = function(drone_data)
   local drone_inventory = get_drone_inventory(drone_data)
   local find_item_stack = drone_inventory.find_item_stack
   local requests = target.item_requests
+
   local stack
   for name, count in pairs(requests) do
     stack = find_item_stack(name)
@@ -1928,10 +1936,8 @@ local process_request_proxy_command = function(drone_data)
   end
 
   if not stack then
-    print("We don't have anything to offer, go pickup something")
-    local name, count = next(requests)
-    drone_data.pickup = {stack = {name = name, count = count}}
-    return process_drone_command(drone_data)
+    print("We don't have anything to offer, abort")
+    return cancel_drone_order(drone_data)
   end
 
   if not move_to_order_target(drone_data, proxy_target, ranges.interact) then

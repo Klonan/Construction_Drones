@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.2.13
+Date: 2019-10-06
+  Changes:
+    - Fixed a game freeze when returning from an item request proxy job.
+    - Fixed script error if another mod destroys an entity during the revive event.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.12
 Date: 2019-09-21
   Changes:
