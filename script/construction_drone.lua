@@ -731,7 +731,7 @@ local check_ghost = function(entity)
   print("Checking ghost "..entity.ghost_name..random())
 
   if not character then
-    game.print("No character")
+    --game.print("No character")
     return
   end
 
@@ -776,7 +776,7 @@ local on_built_entity = function(event)
 
   if entity_type == ghost_type then
     data.ghosts_to_be_checked[entity.unit_number] = entity
-    game.print(entity.unit_number)
+    --game.print(entity.unit_number)
     return
   end
 
@@ -2494,13 +2494,13 @@ local prune_commands = function()
 end
 
 local on_script_path_request_finished = function(event)
-  game.print("HI")
+  --game.print("HI")
   local drone_data = data.path_requests[event.id]
   if not drone_data then return end
   data.path_requests[event.id] = nil
 
   if not event.path then
-    game.print("no path")
+    --game.print("no path")
     clear_target(drone_data)
     clear_extra_targets(drone_data)
     return
@@ -2509,7 +2509,7 @@ local on_script_path_request_finished = function(event)
   local character = drone_data.character
   if not (character and character.valid) then
 
-  game.print("no character")
+    --game.print("no character")
     clear_target(drone_data)
     clear_extra_targets(drone_data)
     return
@@ -2518,7 +2518,7 @@ local on_script_path_request_finished = function(event)
   local drone = make_character_drone(character)
   if not drone then
 
-    game.print("no drone")
+    --game.print("no drone")
     clear_target(drone_data)
     clear_extra_targets(drone_data)
     return
