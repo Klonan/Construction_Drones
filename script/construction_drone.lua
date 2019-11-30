@@ -2253,7 +2253,7 @@ process_drone_command = function(drone_data, result)
   end
   print("Processing drone command")
 
-  drone.speed = drone.prototype.speed
+  drone.speed = drone.prototype.speed * ( 1 + (math.random() - 0.5) / 4)
 
   if (result == defines.behavior_result.fail) then
     print("Fail")
