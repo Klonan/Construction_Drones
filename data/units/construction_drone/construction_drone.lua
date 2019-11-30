@@ -118,6 +118,32 @@ local unit = {
     allow_try_return_to_spawner = false,
     do_separation = true,
     path_resolution_modifier = 0
+  },
+  light =
+  {
+    {
+      minimum_darkness = 0.3,
+      intensity = 0.4,
+      size = 10,
+      color = {r=1.0, g=1.0, b=1.0}
+    },
+    {
+      type = "oriented",
+      minimum_darkness = 0.3,
+      picture =
+      {
+        filename = "__core__/graphics/light-cone.png",
+        priority = "extra-high",
+        flags = { "light" },
+        scale = 2,
+        width = 200,
+        height = 200
+      },
+      shift = {0, -3.5},
+      size = 0.5,
+      intensity = 0.6,
+      color = {r=1.0, g=1.0, b=1.0}
+    }
   }
 }
 
