@@ -142,7 +142,7 @@ end
 local get_characters_in_distance = function(entity, optional_force)
   local origin = entity.position
   local rect_dist = rect_dist
-  local characters = get_characters_for_entity(entity)
+  local characters = get_characters_for_entity(entity, optional_force)
   for k, character in pairs (characters) do
     if character.vehicle or (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) or (rect_dist(origin, character.position) > drone_range) then
       characters[k] = nil
@@ -807,18 +807,26 @@ end
 
 local check_upgrade = function(upgrade_data)
   local entity = upgrade_data.entity
-  if not (entity and entity.valid) then return true end
-  if not entity.to_be_upgraded() then return true end
+  if not (entity and entity.valid) then
+    --game.print("upgrade not valid")
+    return true
+  end
+  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+  if not entity.to_be_upgraded() then
 
-  local target_prototype = upgrade_data.upgrade_prototype
-  if not target_prototype then
-    print("Maybe some migration?")
+    --game.print("upgrade not to be upgraded?")
+    return true
+  end
+
+  local upgrade_prototype = upgrade_data.upgrade_prototype
+  if not upgrade_prototype then
+    --game.print("Maybe some migration?")
     return true
   end
 
   local surface = entity.surface
   local force = entity.force
-  local character, item = get_character_point(target_prototype, entity)
+  local character, item = get_character_point(upgrade_prototype, entity)
   if not character then return end
 
   local count = 0
@@ -846,7 +854,7 @@ local check_upgrade = function(upgrade_data)
     pickup = {stack = {name = item.name, count = count}},
     target = target,
     extra_targets = extra_targets,
-    target_prototype = target_prototype,
+    upgrade_prototype = upgrade_prototype,
     item_used_to_place = item.name
   }
 
@@ -854,7 +862,7 @@ local check_upgrade = function(upgrade_data)
 end
 
 local check_upgrade_lists = function()
-
+  --game.print(serpent.line(data.upgrade_to_be_checked_again))
   local remaining_checks = check_priority_list(data.upgrade_to_be_checked, data.upgrade_to_be_checked_again, check_upgrade, max_checks_per_tick)
   data.upgrade_check_index = check_list(data.upgrade_to_be_checked_again, data.upgrade_check_index, check_upgrade, remaining_checks)
 
@@ -906,7 +914,7 @@ local check_proxies_lists = function()
 end
 
 local check_cliff_deconstruction = function(deconstruct)
-
+  --game.print("HI")
   local entity = deconstruct.entity
   local force = deconstruct.force
   local surface = entity.surface
@@ -914,7 +922,7 @@ local check_cliff_deconstruction = function(deconstruct)
 
   local cliff_destroying_item = entity.prototype.cliff_explosive_prototype
   if not cliff_destroying_item then
-    print("Welp, idk...")
+    --game.print("Welp, idk...")
     return true
   end
 
@@ -922,11 +930,15 @@ local check_cliff_deconstruction = function(deconstruct)
 
   for k, character in pairs (characters) do
     if character.get_item_count(cliff_destroying_item) == 0 then
+      --game.print("no item for this guy")
       characters[k] = nil
     end
   end
 
-  if not next(characters) then return end
+  if not next(characters) then
+    --game.print("no characters")
+    return
+  end
 
   local character = surface.get_closest(position, characters)
 
@@ -1238,12 +1250,13 @@ end
 
 local clear_extra_targets = function(drone_data)
   if not drone_data.extra_targets then return end
+
   local targets = validate(drone_data.extra_targets)
   local order = drone_data.order
 
   if order == drone_orders.upgrade then
     for unit_number, entity in pairs (targets) do
-      data.upgrade_to_be_checked[unit_number] = {entity = entity, upgrade_prototype = drone_data.upgrade_prototype}
+      data.upgrade_to_be_checked_again[unit_number] = {entity = entity, upgrade_prototype = drone_data.upgrade_prototype}
     end
     return
   end
@@ -1262,10 +1275,11 @@ local clear_extra_targets = function(drone_data)
     return
   end
 
-  if order == drone_orders.deconstruct then
+  if order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
     for index, entity in pairs (targets) do
       local index = unique_index(entity)
-      data.deconstructs_to_be_checked[index] = {entity = entity, force = drone_data.entity.force}
+      local force = drone_data.entity and drone_data.entity.force or drone_data.character and drone_data.character.force
+      data.deconstructs_to_be_checked[index] = {entity = entity, force = force}
       data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
     end
     return
@@ -1295,7 +1309,7 @@ local clear_target = function(drone_data)
   local target_unit_number = target.unit_number
   if target_unit_number then
     if data.targets[target_unit_number] then
-      local unit_number = drone_data.drone and drone_data.drone.unit_number
+      local unit_number = drone_data.entity and drone_data.entity.unit_number
       if unit_number then
         data.targets[target_unit_number][unit_number] = nil
         if not next(data.targets[target_unit_number]) then
@@ -1310,15 +1324,15 @@ local clear_target = function(drone_data)
   elseif order == drone_orders.repair then
     data.repair_to_be_checked[target_unit_number] = target
   elseif order == drone_orders.upgrade then
-    data.upgrade_to_be_checked[target_unit_number] = {entity = target, upgrade_prototype = drone_data.upgrade_prototype}
+    data.upgrade_to_be_checked_again[target_unit_number] = {entity = target, upgrade_prototype = drone_data.upgrade_prototype}
   elseif order == drone_orders.construct then
-    data.ghosts_to_be_checked[target_unit_number] = target
+    data.ghosts_to_be_checked_again[target_unit_number] = target
   elseif order == drone_orders.tile_construct then
     data.tiles_to_be_checked[target_unit_number] = target
-  elseif order == drone_orders.deconstruct then
+  elseif order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
     local index = unique_index(target)
-    local force = drone_data.drone and drone_data.drone.force or drone_data.character and drone_data.character.force
-    data.deconstructs_to_be_checked[index] = {entity = target, force = force}
+    local force = drone_data.entity and drone_data.entity.force or drone_data.character and drone_data.character.force
+    data.deconstructs_to_be_checked_again[index] = {entity = target, force = force}
     data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
   end
 
@@ -1865,7 +1879,7 @@ local process_upgrade_command = function(drone_data)
   end
 
   local surface = drone.surface
-  local prototype = drone_data.target_prototype
+  local prototype = drone_data.upgrade_prototype
   local original_name = target.name
   local entity_type = target.type
   local unit_number = target.unit_number
