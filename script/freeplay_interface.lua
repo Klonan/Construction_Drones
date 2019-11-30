@@ -29,6 +29,7 @@ local register_remote = function()
 end
 
 local lib = {}
+
 lib.on_init = register_remote
-lib.get_events = function() return {} end
+
 return lib

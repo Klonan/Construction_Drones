@@ -76,7 +76,8 @@ local data =
   proxy_chests = {},
   characters = {},
   migrate_deconstructs = true,
-  migrate_characters = true
+  migrate_characters = true,
+  path_requests = {}
 
 }
 
@@ -504,6 +505,8 @@ local mine_entity = function(inventory, target)
     ]]
 
   local prototype = target.prototype
+  local position = target.position
+  local surface = target.surface
 
   local products = prototype.mineable_properties.products
 
@@ -512,6 +515,10 @@ local mine_entity = function(inventory, target)
   if not destroyed then
     print("He is still alive after destroying him, tough guy.")
     return false
+  end
+
+  for k, remains_prototype in pairs (prototype.remains_when_mined) do
+    surface.create_entity{name = remains_prototype.name, position = position, force = "neutral"}
   end
 
   take_product_stacks(inventory, products)
@@ -536,6 +543,27 @@ local transfer_item = function(source, destination, name)
       return
     end
   end
+end
+
+local make_path_request = function(drone_data, character, target)
+
+  local prototype = game.entity_prototypes[names.units.construction_drone]
+
+  local path_id = character.surface.request_path
+  {
+    bounding_box = prototype.collision_box,
+    collision_mask = prototype.collision_mask_with_flags,
+    start = character.position,
+    goal = target.position,
+    force = character.force,
+    radius = target.get_radius() + 4,
+    pathfind_flags = {},
+    can_open_gates = true,
+    path_resolution_modifier = 0,
+  }
+
+  data.path_requests[path_id] = drone_data
+
 end
 
 remote.add_interface("construction_drone",
@@ -700,14 +728,13 @@ local check_ghost = function(entity)
   local prototype = game.entity_prototypes[entity.ghost_name]
   local character, item = get_character_point(prototype, entity)
 
+  print("Checking ghost "..entity.ghost_name..random())
+
   if not character then
+    game.print("No character")
     return
   end
 
-  --print("Checking ghost "..entity.ghost_name..random())
-
-  local drone = make_character_drone(character)
-  if not drone then return end
 
   local count = 0
   local extra_targets = {} --{[entity.unit_number] = entity}
@@ -739,7 +766,7 @@ local check_ghost = function(entity)
     extra_targets = extra_targets
   }
 
-  return set_drone_order(drone, drone_data)
+  make_path_request(drone_data, character, target)
 end
 
 local on_built_entity = function(event)
@@ -749,6 +776,7 @@ local on_built_entity = function(event)
 
   if entity_type == ghost_type then
     data.ghosts_to_be_checked[entity.unit_number] = entity
+    game.print(entity.unit_number)
     return
   end
 
@@ -793,9 +821,6 @@ local check_upgrade = function(upgrade_data)
   local character, item = get_character_point(target_prototype, entity)
   if not character then return end
 
-  local drone = make_character_drone(character)
-  if not drone then return end
-
   local count = 0
 
   local extra_targets = {}
@@ -825,7 +850,7 @@ local check_upgrade = function(upgrade_data)
     item_used_to_place = item.name
   }
 
-  return set_drone_order(drone, drone_data)
+  make_path_request(drone_data, character, target)
 end
 
 local check_upgrade_lists = function()
@@ -860,18 +885,15 @@ local check_proxy = function(entity)
       end
     end
     if selected_character then
-      local drone = make_character_drone(selected_character)
-      if drone then
-        drone_data =
-        {
-          character = selected_character,
-          order = drone_orders.request_proxy,
-          pickup = {stack = {name = name, count = count}},
-          target = entity
-        }
-        set_drone_order(drone, drone_data)
-        sent = sent + 1
-      end
+      local drone_data =
+      {
+        character = selected_character,
+        order = drone_orders.request_proxy,
+        pickup = {stack = {name = name, count = count}},
+        target = entity
+      }
+      make_path_request(drone_data, selected_character, entity)
+      sent = sent + 1
     end
   end
   return needed == sent
@@ -908,9 +930,6 @@ local check_cliff_deconstruction = function(deconstruct)
 
   local character = surface.get_closest(position, characters)
 
-  local drone = make_character_drone(character)
-  if not drone then return end
-
   local drone_data =
   {
     character = character,
@@ -918,7 +937,7 @@ local check_cliff_deconstruction = function(deconstruct)
     target = entity,
     pickup = {stack = {name = cliff_destroying_item, count = 1}}
   }
-  set_drone_order(drone, drone_data)
+  make_path_request(drone_data, character, entity)
 
   return true
 
@@ -964,10 +983,11 @@ local check_deconstruction = function(deconstruct)
 
   if needed == 1 then
 
-    local drone = make_character_drone(character)
-    if not drone then return end
+    --local drone = make_character_drone(character)
+    --if not drone then return end
     local extra_targets = {}
     local count = 10
+
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8}) do
       if count <= 0 then break end
       local nearby_index = unique_index(nearby)
@@ -980,9 +1000,11 @@ local check_deconstruction = function(deconstruct)
       end
     end
 
-    local target = surface.get_closest(drone.position, extra_targets)
+    local target = surface.get_closest(character.position, extra_targets)
     if not target then return end
+
     extra_targets[unique_index(target)] = nil
+
     local drone_data =
     {
       character = character,
@@ -990,23 +1012,22 @@ local check_deconstruction = function(deconstruct)
       target = target,
       extra_targets = extra_targets
     }
-    return set_drone_order(drone, drone_data)
+
+    make_path_request(drone_data, character, target)
+    return
 
   end
 
   for k = 1, math.min(needed, 10, character.get_item_count(names.units.construction_drone)) do
     if not (entity and entity.valid) then break end
-    local drone = make_character_drone(character)
-    if drone then
-      local drone_data =
-      {
-        character = character,
-        order = drone_orders.deconstruct,
-        target = entity
-      }
-      set_drone_order(drone, drone_data)
-      sent = sent + 1
-    end
+    local drone_data =
+    {
+      character = character,
+      order = drone_orders.deconstruct,
+      target = entity
+    }
+    make_path_request(drone_data, character, entity)
+    sent = sent + 1
   end
 
   data.sent_deconstruction[index] = sent
@@ -1032,9 +1053,6 @@ local check_tile_deconstruction = function(entity)
 
   local surface = entity.surface
 
-  local drone = make_character_drone(character)
-  if not drone then return end
-
   local extra_targets = {}
   for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, position = entity.position, radius = 3}) do
     local nearby_index = unique_index(nearby)
@@ -1045,7 +1063,7 @@ local check_tile_deconstruction = function(entity)
       data.deconstruction_tile_check_index = remove_from_list(data.deconstruction_proxies_to_be_checked, nearby_index, data.deconstruction_tile_check_index)
     end
   end
-  local target = surface.get_closest(drone.position, extra_targets)
+  local target = surface.get_closest(character.position, extra_targets)
   extra_targets[unique_index(target)] = nil
 
   local drone_data =
@@ -1056,7 +1074,8 @@ local check_tile_deconstruction = function(entity)
     extra_targets = extra_targets
   }
 
-  return set_drone_order(drone, drone_data)
+  make_path_request(drone_data, character, target)
+
 end
 
 local check_tile_deconstruction_lists = function()
@@ -1107,9 +1126,6 @@ local check_repair = function(entity)
     return
   end
 
-  local drone = make_character_drone(selected_character)
-  if not drone then return end
-
   local drone_data =
   {
     character = selected_character,
@@ -1117,8 +1133,7 @@ local check_repair = function(entity)
     pickup = {stack = {name = repair_item.name, count = 1}},
     target = entity,
   }
-  set_drone_order(drone, drone_data)
-
+  make_path_request(drone_data, selected_character, entity)
   return true
 end
 
@@ -1145,8 +1160,8 @@ local check_tile = function(entity)
     return
   end
 
-  local drone = make_character_drone(character)
-  if not drone then return end
+  --local drone = make_character_drone(character)
+  --if not drone then return end
 
   local count = 0
   local extra_targets = {}
@@ -1174,7 +1189,8 @@ local check_tile = function(entity)
     extra_targets = extra_targets
   }
 
-  return set_drone_order(drone, drone_data)
+  make_path_request(drone_data, character, target)
+
 end
 
 local check_tile_lists = function()
@@ -1183,8 +1199,8 @@ local check_tile_lists = function()
 end
 
 local on_tick = function(event)
-
   --local profiler = game.create_profiler()
+
 
   check_deconstruction_lists()
   --game.print({"", game.tick, " deconstruction checks ", profiler})
@@ -1220,7 +1236,7 @@ local get_build_time = function(drone_data)
   return random(10, 20)
 end
 
-local cancel_extra_targets = function(drone_data)
+local clear_extra_targets = function(drone_data)
   if not drone_data.extra_targets then return end
   local targets = validate(drone_data.extra_targets)
   local order = drone_data.order
@@ -1269,6 +1285,45 @@ local drone_wait = function(drone_data, ticks)
   }
 end
 
+local clear_target = function(drone_data)
+
+  local target = drone_data.target
+  if not (target and target.valid) then
+    return
+  end
+  local order = drone_data.order
+  local target_unit_number = target.unit_number
+  if target_unit_number then
+    if data.targets[target_unit_number] then
+      local unit_number = drone_data.drone and drone_data.drone.unit_number
+      if unit_number then
+        data.targets[target_unit_number][unit_number] = nil
+        if not next(data.targets[target_unit_number]) then
+          data.targets[target_unit_number] = nil
+        end
+      end
+    end
+  end
+
+  if order == drone_orders.request_proxy then
+    insert(data.proxies_to_be_checked, target)
+  elseif order == drone_orders.repair then
+    data.repair_to_be_checked[target_unit_number] = target
+  elseif order == drone_orders.upgrade then
+    data.upgrade_to_be_checked[target_unit_number] = {entity = target, upgrade_prototype = drone_data.upgrade_prototype}
+  elseif order == drone_orders.construct then
+    data.ghosts_to_be_checked[target_unit_number] = target
+  elseif order == drone_orders.tile_construct then
+    data.tiles_to_be_checked[target_unit_number] = target
+  elseif order == drone_orders.deconstruct then
+    local index = unique_index(target)
+    local force = drone_data.drone and drone_data.drone.force or drone_data.character and drone_data.character.force
+    data.deconstructs_to_be_checked[index] = {entity = target, force = force}
+    data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
+  end
+
+end
+
 local cancel_drone_order = function(drone_data, on_removed)
   local drone = drone_data.entity
   if not (drone and drone.valid) then return end
@@ -1276,37 +1331,8 @@ local cancel_drone_order = function(drone_data, on_removed)
 
   print("Drone command cancelled "..unit_number.." - "..game.tick)
 
-  local target = drone_data.target
-  if target and target.valid then
-    local order = drone_data.order
-    local target_unit_number = target.unit_number
-    if target_unit_number then
-      if data.targets[target_unit_number] then
-        data.targets[target_unit_number][unit_number] = nil
-        if not next(data.targets[target_unit_number]) then
-          data.targets[target_unit_number] = nil
-        end
-      end
-    end
-
-    if order == drone_orders.request_proxy then
-      insert(data.proxies_to_be_checked, target)
-    elseif order == drone_orders.repair then
-      data.repair_to_be_checked[target_unit_number] = target
-    elseif order == drone_orders.upgrade then
-      data.upgrade_to_be_checked[target_unit_number] = {entity = target, upgrade_prototype = drone_data.upgrade_prototype}
-    elseif order == drone_orders.construct then
-      data.ghosts_to_be_checked[target_unit_number] = target
-    elseif order == drone_orders.tile_construct then
-      data.tiles_to_be_checked[target_unit_number] = target
-    elseif order == drone_orders.deconstruct then
-      local index = unique_index(target)
-      data.deconstructs_to_be_checked[index] = {entity = target, force = drone.force}
-      data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
-    end
-  end
-
-  cancel_extra_targets(drone_data)
+  clear_target(drone_data)
+  clear_extra_targets(drone_data)
 
   drone_data.pickup = nil
   drone_data.path = nil
@@ -2453,10 +2479,45 @@ local prune_commands = function()
   end
 end
 
+local on_script_path_request_finished = function(event)
+  game.print("HI")
+  local drone_data = data.path_requests[event.id]
+  if not drone_data then return end
+  data.path_requests[event.id] = nil
+
+  if not event.path then
+    game.print("no path")
+    clear_target(drone_data)
+    clear_extra_targets(drone_data)
+    return
+  end
+
+  local character = drone_data.character
+  if not (character and character.valid) then
+
+  game.print("no character")
+    clear_target(drone_data)
+    clear_extra_targets(drone_data)
+    return
+  end
+
+  local drone = make_character_drone(character)
+  if not drone then
+
+    game.print("no drone")
+    clear_target(drone_data)
+    clear_extra_targets(drone_data)
+    return
+  end
+
+  set_drone_order(drone, drone_data)
+
+end
+
 
 local lib = {}
 
-local events =
+lib.events =
 {
   [defines.events.on_tick] = on_tick,
 
@@ -2480,21 +2541,13 @@ local events =
   [defines.events.on_entity_damaged] = on_entity_damaged,
   [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
   [defines.events.on_entity_cloned] = on_entity_cloned,
-}
 
-local register_events = function()
-  lib.on_event = handler(events)
-  if remote.interfaces["unit_control"] then
-    local unit_control_events = remote.call("unit_control", "get_events")
-    --events[unit_control_events.on_unit_idle] = on_unit_idle
-    --events[unit_control_events.on_unit_not_idle] = on_unit_not_idle
-  end
-end
+  [defines.events.on_script_path_request_finished] = on_script_path_request_finished,
+}
 
 lib.on_load = function()
   data = global.construction_drone or data
   global.construction_drone = data
-  register_events()
 end
 
 lib.on_init = function()
@@ -2505,7 +2558,6 @@ lib.on_init = function()
 
   resetup_ghosts()
   setup_characters()
-  register_events()
 
   if remote.interfaces["unit_control"] then
     remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
@@ -2546,9 +2598,6 @@ lib.on_configuration_changed = function()
 
   setup_characters()
   prune_commands()
-
 end
-
-lib.get_events = function() return events end
 
 return lib
