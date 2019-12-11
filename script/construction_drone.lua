@@ -5,7 +5,7 @@ local remove = table.remove
 local pairs = pairs
 local beams = names.beams
 local proxy_name = names.entities.construction_drone_proxy_chest
-local drone_range = 100
+local drone_range = 80
 local beam_offset = {0, -0.5}
 
 drone_prototypes =

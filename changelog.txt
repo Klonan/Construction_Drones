@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.0
+Date: 2019-12-1
+  Changes:
+    - Drones will only be set to do jobs that they can path to.
+    - Fixed some problems with some of the jobs.
+---------------------------------------------------------------------------------------------------
 Version: 0.2.13
 Date: 2019-10-06
   Changes:
