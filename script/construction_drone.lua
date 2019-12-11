@@ -658,6 +658,18 @@ local make_character_drone = function(character)
   if not position then return end
   local drone = character.surface.create_entity{name = names.units.construction_drone, position = position, force = character.force}
   character.remove_item({name = names.units.construction_drone, count = 1})
+
+  rendering.draw_light
+  {
+    sprite = "drone-light",
+    oriented = true,
+    target = drone,
+    target_offset = {0, -0.5},
+    surface = drone.surface,
+    minimum_darkness = 0.3,
+    intensity = 0.6,
+  }
+
   return drone
 end
 
@@ -2599,6 +2611,8 @@ lib.on_configuration_changed = function()
     data.deconstructs_to_be_checked = new_check
     data.deconstructs_to_be_checked_again = {}
   end
+
+  data.path_requests = data.path_requests or {}
 
   setup_characters()
   prune_commands()
