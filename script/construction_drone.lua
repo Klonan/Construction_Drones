@@ -1646,7 +1646,7 @@ local process_construct_command = function(drone_data)
 
   local unit_number = target.unit_number
   local success, entity, proxy = target.revive(revive_param)
-  if not (success and entity) then
+  if not success then
     if target.valid then
       drone_wait(drone_data, 30)
       print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
@@ -1656,9 +1656,6 @@ local process_construct_command = function(drone_data)
         unit_clear_target(unit, target)
       end
       return
-    else
-      --idk
-      return cancel_drone_order(drone_data)
     end
   end
 
@@ -1681,7 +1678,7 @@ local process_construct_command = function(drone_data)
   {
     name = beams.build,
     source = drone,
-    target = entity.valid and entity,
+    target = entity and entity.valid and entity,
     target_position = position,
     position = position,
     force = drone.force,
