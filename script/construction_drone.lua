@@ -1655,8 +1655,8 @@ local process_construct_command = function(drone_data)
         print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
         unit_clear_target(unit, target)
       end
-      return
     end
+    return
   end
 
 
