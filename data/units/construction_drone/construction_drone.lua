@@ -436,6 +436,7 @@ proxy_chest.localised_name = proxy_chest_name
 proxy_chest.collision_box = nil
 proxy_chest.inventory_size = 4
 proxy_chest.order = "nnov"
+proxy_chest.next_upgrade = nil
 
 local beam_blend_mode = "additive"
 local beam_base =
