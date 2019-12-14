@@ -1,6 +1,16 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.3.2
+Date: 2019-12-14
+  Changes:
+    - Fixed spawning too many drones sometimes.
+---------------------------------------------------------------------------------------------------
+Version: 0.3.1
+Date: 2019-12-12
+  Changes:
+    - Fixed some load error with other mods.
+---------------------------------------------------------------------------------------------------
 Version: 0.3.0
-Date: 2019-12-1
+Date: 2019-12-11
   Changes:
     - Drones will only be set to do jobs that they can path to.
     - Fixed some problems with some of the jobs.

@@ -77,7 +77,8 @@ local data =
   characters = {},
   migrate_deconstructs = true,
   migrate_characters = true,
-  path_requests = {}
+  path_requests = {},
+  request_count = {}
 
 }
 
@@ -120,44 +121,42 @@ local get_characters = function()
   return characters
 end
 
-local get_characters_for_entity = function(entity, optional_force)
+local can_character_spawn_drones = function(character)
+  if character.vehicle then return end
+  if not character.allow_dispatching_robots then return end
+  local count = character.get_item_count(names.units.construction_drone) - (data.request_count[character.unit_number] or 0)
+  return count > 0
+end
+
+local abs = math.abs
+local rect_dist = function(position_1, position_2)
+  return abs(position_1.x - position_2.x) + abs(position_1.y - position_2.y)
+end
+
+local get_characters_for_entity = function(entity, optional_force, predicate)
   --matches force and surface
   local force = optional_force or entity.force
   local surface = entity.surface
   local new_characters = {}
   for k, character in pairs (get_characters()) do
-    if character.force == force and character.surface == surface then
+    if character.force == force and character.surface == surface and can_character_spawn_drones(character) and (not predicate or predicate(character, entity)) then
       new_characters[k] = character
     end
   end
   return new_characters
 end
 
-local abs = math.abs
-
-local rect_dist = function(position_1, position_2)
-  return abs(position_1.x - position_2.x) + abs(position_1.y - position_2.y)
-end
 
 local get_characters_in_distance = function(entity, optional_force)
   local origin = entity.position
-  local rect_dist = rect_dist
-  local characters = get_characters_for_entity(entity, optional_force)
-  for k, character in pairs (characters) do
-    if character.vehicle or (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) or (rect_dist(origin, character.position) > drone_range) then
-      characters[k] = nil
-    end
+  local predicate = function(character)
+    return rect_dist(origin, character.position) <= drone_range
   end
-  return characters
+  return get_characters_for_entity(entity, optional_force, predicate)
 end
 
 local get_character_for_job = function(entity, optional_force)
   local characters = get_characters_for_entity(entity, optional_force)
-  for k, character in pairs (characters) do
-    if character.vehicle or (not character.allow_dispatching_robots) or (character.get_item_count(names.units.construction_drone) == 0) then
-      characters[k] = nil
-    end
-  end
 
   if not next(characters) then return end
 
@@ -564,6 +563,9 @@ local make_path_request = function(drone_data, character, target)
 
   data.path_requests[path_id] = drone_data
 
+  local unit_number = character.unit_number
+  data.request_count[unit_number] = (data.request_count[unit_number] or 0) + 1
+
 end
 
 remote.add_interface("construction_drone",
@@ -656,8 +658,11 @@ local process_drone_command
 local make_character_drone = function(character)
   local position = character.surface.find_non_colliding_position(names.units.construction_drone, character.position, 5, 0.5, false)
   if not position then return end
+
+  local removed = character.remove_item({name = names.units.construction_drone, count = 1})
+  if removed == 0 then return end
+
   local drone = character.surface.create_entity{name = names.units.construction_drone, position = position, force = character.force}
-  character.remove_item({name = names.units.construction_drone, count = 1})
 
   rendering.draw_light
   {
@@ -1623,7 +1628,6 @@ local get_extra_target = function(drone_data)
   end
 end
 
-
 local revive_param = {return_item_request_proxy = true, raise_revive = true}
 local process_construct_command = function(drone_data)
   print("Processing construct command")
@@ -2498,6 +2502,17 @@ local on_script_path_request_finished = function(event)
   if not drone_data then return end
   data.path_requests[event.id] = nil
 
+  local character = drone_data.character
+  if not (character and character.valid) then
+    --game.print("no character")
+    clear_target(drone_data)
+    clear_extra_targets(drone_data)
+    return
+  end
+
+  local unit_number = character.unit_number
+  data.request_count[unit_number] = (data.request_count[unit_number] or 0) - 1
+
   if not event.path then
     --game.print("no path")
     clear_target(drone_data)
@@ -2505,14 +2520,6 @@ local on_script_path_request_finished = function(event)
     return
   end
 
-  local character = drone_data.character
-  if not (character and character.valid) then
-
-    --game.print("no character")
-    clear_target(drone_data)
-    clear_extra_targets(drone_data)
-    return
-  end
 
   local drone = make_character_drone(character)
   if not drone then
@@ -2610,6 +2617,7 @@ lib.on_configuration_changed = function()
   end
 
   data.path_requests = data.path_requests or {}
+  data.request_count = data.request_count or {}
 
   setup_characters()
   prune_commands()
