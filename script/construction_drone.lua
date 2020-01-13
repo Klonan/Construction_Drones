@@ -1897,7 +1897,8 @@ local process_upgrade_command = function(drone_data)
     fast_replace = true,
     force = target.force,
     spill = false,
-    type = type
+    type = type,
+    raise_built = true
   }
   if not upgraded then error("Shouldn't happen, upgrade failed when creating entity... let me know!") return end
 
@@ -1922,7 +1923,8 @@ local process_upgrade_command = function(drone_data)
       fast_replace = true,
       force = neighbour.force,
       spill = false,
-      type = type
+      type = type,
+      raise_built = true
     }
     clear_target_data(neighbour_unit_number)
     take_product_stacks(drone_inventory, products)
