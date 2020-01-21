@@ -664,17 +664,6 @@ local make_character_drone = function(character)
 
   local drone = character.surface.create_entity{name = names.units.construction_drone, position = position, force = character.force}
 
-  rendering.draw_light
-  {
-    sprite = "drone-light",
-    oriented = true,
-    target = drone,
-    target_offset = {0, -0.5},
-    surface = drone.surface,
-    minimum_darkness = 0.3,
-    intensity = 0.6,
-  }
-
   return drone
 end
 
@@ -1888,11 +1877,12 @@ local process_upgrade_command = function(drone_data)
   local unit_number = target.unit_number
   local neighbour = entity_type == "underground-belt" and target.neighbours
   local type = entity_type == "underground-belt" and target.belt_to_ground_type or entity_type == "loader" and target.loader_type
+  local position = target.position
 
   local upgraded = surface.create_entity
   {
     name = prototype.name,
-    position = target.position,
+    position = position,
     direction = target.direction,
     fast_replace = true,
     force = target.force,
@@ -1940,13 +1930,13 @@ local process_upgrade_command = function(drone_data)
   update_drone_sticker(drone_data)
   local drone = drone_data.entity
   local build_time = get_build_time(drone_data)
-  local orientation, offset = get_beam_orientation(drone.position, upgraded.position)
+  local orientation, offset = get_beam_orientation(drone.position, position)
   drone.orientation = orientation
   drone.surface.create_entity
   {
     name = beams.build,
     source = drone,
-    target = upgraded,
+    target_position = position,
     position = drone.position,
     force = drone.force,
     duration = build_time,
