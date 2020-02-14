@@ -1327,7 +1327,7 @@ local clear_target = function(drone_data)
     data.tiles_to_be_checked[target_unit_number] = target
   elseif order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
     local index = unique_index(target)
-    local force = drone_data.entity and drone_data.entity.force or drone_data.character and drone_data.character.force
+    local force = (drone_data.entity and drone_data.enttiy.valid and drone_data.entity.force) or (drone_data.character and drone_data.character.valid and drone_data.character.force)
     data.deconstructs_to_be_checked_again[index] = {entity = target, force = force}
     data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
   end
@@ -1879,7 +1879,7 @@ local process_upgrade_command = function(drone_data)
   local type = entity_type == "underground-belt" and target.belt_to_ground_type or entity_type == "loader" and target.loader_type
   local position = target.position
 
-  local upgraded = surface.create_entity
+  surface.create_entity
   {
     name = prototype.name,
     position = position,
@@ -1887,10 +1887,9 @@ local process_upgrade_command = function(drone_data)
     fast_replace = true,
     force = target.force,
     spill = false,
-    type = type,
+    type = type or nil,
     raise_built = true
   }
-  if not upgraded then error("Shouldn't happen, upgrade failed when creating entity... let me know!") return end
 
   get_drone_inventory(drone_data).remove({name = drone_data.item_used_to_place})
   clear_target_data(unit_number)
@@ -1905,7 +1904,7 @@ local process_upgrade_command = function(drone_data)
     print("Upgrading neighbour")
     local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
     local neighbour_unit_number = neighbour.unit_number
-    local upgraded_neighbour = surface.create_entity
+    surface.create_entity
     {
       name = prototype.name,
       position = neighbour.position,
@@ -1913,7 +1912,7 @@ local process_upgrade_command = function(drone_data)
       fast_replace = true,
       force = neighbour.force,
       spill = false,
-      type = type,
+      type = type or nil,
       raise_built = true
     }
     clear_target_data(neighbour_unit_number)
