@@ -1327,7 +1327,7 @@ local clear_target = function(drone_data)
     data.tiles_to_be_checked[target_unit_number] = target
   elseif order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
     local index = unique_index(target)
-    local force = (drone_data.entity and drone_data.enttiy.valid and drone_data.entity.force) or (drone_data.character and drone_data.character.valid and drone_data.character.force)
+    local force = (drone_data.entity and drone_data.entity.valid and drone_data.entity.force) or (drone_data.character and drone_data.character.valid and drone_data.character.force)
     data.deconstructs_to_be_checked_again[index] = {entity = target, force = force}
     data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
   end
