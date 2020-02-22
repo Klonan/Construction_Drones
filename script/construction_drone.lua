@@ -501,7 +501,7 @@ local mine_entity = function(inventory, target)
     return true
   end
   if target.has_items_inside() then
-    print("Tried to take all the target items, but he still has some, ergo, we cant fit that many items.")
+  --print("Tried to take all the target items, but he still has some, ergo, we cant fit that many items.")
     return
   end
   
@@ -527,7 +527,7 @@ local mine_entity = function(inventory, target)
   local destroyed = target.destroy(destroy_param)
 
   if not destroyed then
-    print("He is still alive after destroying him, tough guy.")
+  --print("He is still alive after destroying him, tough guy.")
     return false
   end
 
@@ -589,7 +589,7 @@ remote.add_interface("construction_drone",
     data.debug = bool
   end,
   dump = function()
-    print(serpent.block(data))
+  --print(serpent.block(data))
   end
 })
 
@@ -712,7 +712,7 @@ end
 
 local set_drone_idle = function(drone)
   if not (drone and drone.valid) then return end
-  print("Setting drone idle")
+--print("Setting drone idle")
   local drone_data = data.drone_commands[drone.unit_number]
 
 
@@ -739,7 +739,7 @@ local check_ghost = function(entity)
   local prototype = game.entity_prototypes[entity.ghost_name]
   local character, item = get_character_point(prototype, entity)
 
-  print("Checking ghost "..entity.ghost_name..random())
+--print("Checking ghost "..entity.ghost_name..random())
 
   if not character then
     --game.print("No character")
@@ -881,12 +881,12 @@ end
 
 local check_proxy = function(entity)
   if not (entity and entity.valid) then
-    print("Proxy not valid")
+  --print("Proxy not valid")
     return true
   end
   local target = entity.proxy_target
   if not (target and target.valid) then
-    print("Proxy target not valid")
+  --print("Proxy target not valid")
     return true
   end
 
@@ -989,7 +989,7 @@ local check_deconstruction = function(deconstruct)
 
   --[[local mineable_properties = entity.prototype.mineable_properties
   if not mineable_properties.minable then
-    print("Why are you marked for deconstruction if I cant mine you?")
+  --print("Why are you marked for deconstruction if I cant mine you?")
     return
   end]]
 
@@ -1128,7 +1128,7 @@ end
 local check_repair = function(entity)
   if not (entity and entity.valid) then return true end
   --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
-  print("Checking repair of an entity: "..entity.name)
+--print("Checking repair of an entity: "..entity.name)
   if entity.has_flag("not-repairable") then return true end
 
   local health = entity.get_health_ratio()
@@ -1185,7 +1185,7 @@ local check_tile = function(entity)
   local character, item = get_character_point(tile_prototype, entity)
 
   if not character then
-    print("no eligible character with item?")
+  --print("no eligible character with item?")
     return
   end
 
@@ -1360,7 +1360,7 @@ local cancel_drone_order = function(drone_data, on_removed)
   if not (drone and drone.valid) then return end
   local unit_number = drone.unit_number
 
-  print("Drone command cancelled "..unit_number.." - "..game.tick)
+--print("Drone command cancelled "..unit_number.." - "..game.tick)
 
   clear_target(drone_data)
   clear_extra_targets(drone_data)
@@ -1378,7 +1378,7 @@ local cancel_drone_order = function(drone_data, on_removed)
   local stack = get_drone_first_stack(drone_data)
   if stack then
     if not on_removed then
-      print("Holding a stack, gotta go drop it off... "..unit_number)
+    --print("Holding a stack, gotta go drop it off... "..unit_number)
       drone_data.dropoff = {stack = stack}
       return process_drone_command(drone_data)
     end
@@ -1525,11 +1525,11 @@ update_drone_sticker = function(drone_data)
 end
 
 local process_pickup_command = function(drone_data)
-  print("Procesing pickup command")
+--print("Procesing pickup command")
 
   local chest = drone_data.character
   if not (chest and chest.valid) then
-    print("Character for pickup was not valid")
+  --print("Character for pickup was not valid")
     return cancel_drone_order(drone_data)
   end
 
@@ -1538,7 +1538,7 @@ local process_pickup_command = function(drone_data)
   end
 
 
-  print("Pickup chest in range, picking up item")
+--print("Pickup chest in range, picking up item")
 
   local stack = drone_data.pickup.stack
   local drone_inventory = get_drone_inventory(drone_data)
@@ -1562,7 +1562,7 @@ end
 local process_dropoff_command = function(drone_data)
 
   local drone = drone_data.entity
-  print("Procesing dropoff command. "..drone.unit_number)
+--print("Procesing dropoff command. "..drone.unit_number)
 
   if drone_data.character then
     return process_return_to_character_command(drone_data)
@@ -1640,7 +1640,7 @@ end
 
 local revive_param = {return_item_request_proxy = true, raise_revive = true}
 local process_construct_command = function(drone_data)
-  print("Processing construct command")
+--print("Processing construct command")
   local target = drone_data.target
   if not (target and target.valid) then
     return cancel_drone_order(drone_data)
@@ -1663,10 +1663,10 @@ local process_construct_command = function(drone_data)
   if not success then
     if target.valid then
       drone_wait(drone_data, 30)
-      print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
+    --print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
       local radius = get_radius(target)
       for k, unit in pairs (target.surface.find_entities_filtered{type = "unit", position = position, radius = radius}) do
-        print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
+      --print("Telling idiot to MOVE IT ("..drone.unit_number.." - "..game.tick..")")
         unit_clear_target(unit, target)
       end
     end
@@ -1733,7 +1733,7 @@ local process_failed_command = function(drone_data)
 end
 
 local process_deconstruct_command = function(drone_data)
-  print("Processing deconstruct command")
+--print("Processing deconstruct command")
   local target = drone_data.target
   if not (target and target.valid) then
     return cancel_drone_order(drone_data)
@@ -1802,7 +1802,7 @@ local process_deconstruct_command = function(drone_data)
 end
 
 local process_repair_command = function(drone_data)
-  print("Processing repair command")
+--print("Processing repair command")
   local target = drone_data.target
 
   if not (target and target.valid) then
@@ -1810,7 +1810,7 @@ local process_repair_command = function(drone_data)
   end
 
   if target.get_health_ratio() == 1 then
-    print("Target is fine... give up on healing him")
+  --print("Target is fine... give up on healing him")
     return cancel_drone_order(drone_data)
   end
 
@@ -1829,14 +1829,14 @@ local process_repair_command = function(drone_data)
   end
 
   if not stack then
-    print("I don't have a repair item... get someone else to do it")
+  --print("I don't have a repair item... get someone else to do it")
     return cancel_drone_order(drone_data)
   end
 
   local health = target.health
   local repair_speed = game.item_prototypes[stack.name].speed
   if not repair_speed then
-    print("WTF, maybe some migration?")
+  --print("WTF, maybe some migration?")
     return cancel_drone_order(drone_data)
   end
 
@@ -1852,7 +1852,7 @@ local process_repair_command = function(drone_data)
   stack.drain_durability(repair_amount)
 
   if not stack.valid_for_read then
-    print("Stack expired, someone else will take over")
+  --print("Stack expired, someone else will take over")
     return cancel_drone_order(drone_data)
   end
 
@@ -1873,7 +1873,7 @@ local process_repair_command = function(drone_data)
 end
 
 local process_upgrade_command = function(drone_data)
-  print("Processing upgrade command")
+--print("Processing upgrade command")
 
   local target = drone_data.target
   if not (target and target.valid and target.to_be_upgraded()) then
@@ -1922,7 +1922,7 @@ local process_upgrade_command = function(drone_data)
 
 
   if neighbour and neighbour.valid then
-    print("Upgrading neighbour")
+  --print("Upgrading neighbour")
     local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
     local neighbour_unit_number = neighbour.unit_number
     surface.create_entity
@@ -1966,7 +1966,7 @@ local process_upgrade_command = function(drone_data)
 end
 
 local process_request_proxy_command = function(drone_data)
-  print("Processing request proxy command")
+--print("Processing request proxy command")
 
   local target = drone_data.target
   if not (target and target.valid) then
@@ -1991,7 +1991,7 @@ local process_request_proxy_command = function(drone_data)
   end
 
   if not stack then
-    print("We don't have anything to offer, abort")
+  --print("We don't have anything to offer, abort")
     return cancel_drone_order(drone_data)
   end
 
@@ -1999,13 +1999,13 @@ local process_request_proxy_command = function(drone_data)
     return
   end
 
-  print("We are in range, and we have what he wants")
+--print("We are in range, and we have what he wants")
 
   local stack_name = stack.name
   local position = target.position
   local inserted = proxy_target.insert(stack)
   if inserted == 0 then
-    print("Can't insert anything anyway, kill the proxy")
+  --print("Can't insert anything anyway, kill the proxy")
     target.destroy()
     return cancel_drone_order(drone_data)
   end
@@ -2041,7 +2041,7 @@ local process_request_proxy_command = function(drone_data)
 end
 
 local process_construct_tile_command = function(drone_data)
-  print("Processing construct tile command")
+--print("Processing construct tile command")
   local target = drone_data.target
   if not (target and target.valid) then
     return cancel_drone_order(drone_data)
@@ -2104,10 +2104,10 @@ local process_construct_tile_command = function(drone_data)
 end
 
 local process_deconstruct_tile_command = function(drone_data)
-  print("Processing deconstruct tile command")
+--print("Processing deconstruct tile command")
   local target = drone_data.target
   if not (target and target.valid) then
-    print("Target was not valid...")
+  --print("Target was not valid...")
     return cancel_drone_order(drone_data)
   end
 
@@ -2171,11 +2171,11 @@ local process_deconstruct_tile_command = function(drone_data)
 end
 
 local process_deconstruct_cliff_command = function(drone_data)
-  print("Processing deconstruct cliff command")
+--print("Processing deconstruct cliff command")
   local target = drone_data.target
 
   if not (target and target.valid) then
-    print("Target cliff was not valid. ")
+  --print("Target cliff was not valid. ")
     return cancel_drone_order(drone_data)
   end
 
@@ -2209,7 +2209,7 @@ local process_deconstruct_cliff_command = function(drone_data)
   get_drone_inventory(drone_data).remove{name = target.prototype.cliff_explosive_prototype, count = 1}
   target.surface.create_entity{name = "ground-explosion", position = util.center(target.bounding_box)}
   target.destroy()
-  print("Cliff destroyed, heading home bois. ")
+--print("Cliff destroyed, heading home bois. ")
   update_drone_sticker(drone_data)
 
   return set_drone_idle(drone)
@@ -2229,7 +2229,7 @@ local directions =
 
 process_return_to_character_command = function(drone_data)
 
-  print("returning to dude")
+--print("returning to dude")
 
   local target = drone_data.character
   if not (target and target.valid) then
@@ -2277,65 +2277,65 @@ process_drone_command = function(drone_data, result)
     return
   end
 
-  local print = function(string)
-    print(string.. " | "..drone.unit_number)
-  end
-  print("Processing drone command")
+  --local print = function(string)
+  --print(string.. " | "..drone.unit_number)
+  --end
+--print("Processing drone command")
 
   drone.speed = drone.prototype.speed * ( 1 + (math.random() - 0.5) / 4)
 
   if (result == defines.behavior_result.fail) then
-    print("Fail")
+  --print("Fail")
     return process_failed_command(drone_data)
   end
 
   if drone_data.pickup then
-    print("Pickup")
+  --print("Pickup")
     return process_pickup_command(drone_data)
   end
 
   if drone_data.dropoff then
-    print("Dropoff")
+  --print("Dropoff")
     return process_dropoff_command(drone_data)
   end
 
   if drone_data.order == drone_orders.construct then
-    print("Construct")
+  --print("Construct")
     return process_construct_command(drone_data)
   end
 
   if drone_data.order == drone_orders.deconstruct then
-    print("Deconstruct")
+  --print("Deconstruct")
     return process_deconstruct_command(drone_data)
   end
 
   if drone_data.order == drone_orders.repair then
-    print("Repair")
+  --print("Repair")
     return process_repair_command(drone_data)
   end
 
   if drone_data.order == drone_orders.upgrade then
-    print("Upgrade")
+  --print("Upgrade")
     return process_upgrade_command(drone_data)
   end
 
   if drone_data.order == drone_orders.request_proxy then
-    print("Request proxy")
+  --print("Request proxy")
     return process_request_proxy_command(drone_data)
   end
 
   if drone_data.order == drone_orders.tile_construct then
-    print("Tile Construct")
+  --print("Tile Construct")
     return process_construct_tile_command(drone_data)
   end
 
   if drone_data.order == drone_orders.tile_deconstruct then
-    print("Tile Deconstruct")
+  --print("Tile Deconstruct")
     return process_deconstruct_tile_command(drone_data)
   end
 
   if drone_data.order == drone_orders.cliff_deconstruct then
-    print("Cliff Deconstruct")
+  --print("Cliff Deconstruct")
     return process_deconstruct_cliff_command(drone_data)
   end
 
@@ -2352,14 +2352,14 @@ end
 local on_ai_command_completed = function(event)
   local drone_data = data.drone_commands[event.unit_number]
   if drone_data then
-    print("Drone command complete event: "..event.unit_number.." = "..tostring(result ~= defines.behavior_result.fail))
+  --print("Drone command complete event: "..event.unit_number.." = "..tostring(result ~= defines.behavior_result.fail))
     return process_drone_command(drone_data, event.result)
   end
 end
 
 local on_entity_removed = function(event)
   local entity = event.entity or event.ghost
-  print("On removed event fired: "..entity.name.." - "..game.tick)
+--print("On removed event fired: "..entity.name.." - "..game.tick)
   if not (entity and entity.valid) then return end
   local unit_number = entity.unit_number
   if not unit_number then return end
@@ -2371,7 +2371,7 @@ local on_entity_removed = function(event)
     end
     local proxy_chest = data.proxy_chests[unit_number]
     if proxy_chest and proxy_chest.valid then
-      print("Giving inventory buffer from proxy")
+    --print("Giving inventory buffer from proxy")
       local buffer = event.buffer
       if buffer and buffer.valid then
         local inventory = proxy_chest.get_inventory(defines.inventory.chest)
