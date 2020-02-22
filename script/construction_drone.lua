@@ -123,7 +123,16 @@ end
 
 local can_character_spawn_drones = function(character)
   if character.vehicle then return end
-  if not character.allow_dispatching_robots then return end
+
+  if character.allow_dispatching_robots then
+    local network = character.logistic_network
+    if network then
+      if network.all_construction_robots > 0 then
+        return
+      end
+    end
+  end
+  
   local count = character.get_item_count(names.units.construction_drone) - (data.request_count[character.unit_number] or 0)
   return count > 0
 end
