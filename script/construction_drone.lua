@@ -132,7 +132,7 @@ local can_character_spawn_drones = function(character)
       end
     end
   end
-  
+
   local count = character.get_item_count(names.units.construction_drone) - (data.request_count[character.unit_number] or 0)
   return count > 0
 end
@@ -2539,6 +2539,36 @@ local on_script_path_request_finished = function(event)
 
 end
 
+local set_damaged_event_filter = function()
+
+  if not data.non_repairable_entities then return end
+
+  local filters = {}
+  for name, bool in pairs (data.non_repairable_entities) do
+    local filter =
+    {
+      filter = "name",
+      name = name,
+      invert = true,
+      mode = "and"
+    }
+    table.insert(filters, filter)
+  end
+
+  if not next(filters) then return end
+
+  script.set_event_filter(defines.events.on_entity_damaged, filters)
+end
+
+local update_non_repairable_entities = function()
+  data.non_repairable_entities = {}
+  for name, entity in pairs (game.entity_prototypes) do
+    if entity.has_flag("not-repairable") then
+      data.non_repairable_entities[name] = true
+    end
+  end
+  set_damaged_event_filter()
+end
 
 local lib = {}
 
@@ -2573,6 +2603,7 @@ lib.events =
 lib.on_load = function()
   data = global.construction_drone or data
   global.construction_drone = data
+  set_damaged_event_filter()
 end
 
 lib.on_init = function()
@@ -2587,6 +2618,7 @@ lib.on_init = function()
   if remote.interfaces["unit_control"] then
     remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
   end
+  update_non_repairable_entities()
 end
 
 lib.on_configuration_changed = function()
@@ -2626,6 +2658,8 @@ lib.on_configuration_changed = function()
 
   setup_characters()
   prune_commands()
+  
+  update_non_repairable_entities()
 end
 
 return lib
