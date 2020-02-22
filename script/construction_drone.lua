@@ -494,20 +494,25 @@ local mine_entity = function(inventory, target)
     print("Tried to take all the target items, but he still has some, ergo, we cant fit that many items.")
     return
   end
-
+  
   --[[
-
+    
     if not inventory.is_empty() then
       --Decided they only carry 1 stack now...
       return
     end
     ]]
-
-  local prototype = target.prototype
-  local position = target.position
-  local surface = target.surface
-
-  local products = prototype.mineable_properties.products
+    
+    local prototype = target.prototype
+    local position = target.position
+    local surface = target.surface
+    
+    local products = prototype.mineable_properties.products
+    
+    if products[1] and not inventory.can_insert(products[1]) then
+      --We can't insert even 1 of the result products
+      return
+    end
 
   local destroyed = target.destroy(destroy_param)
 
