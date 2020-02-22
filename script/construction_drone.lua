@@ -33,6 +33,7 @@ local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
 local max_checks_per_tick = 2
+local max_important_checks_per_tick = 5
 
 local drone_pathfind_flags =
 {
@@ -810,7 +811,7 @@ end
 
 local check_ghost_lists = function()
 
-  local remaining_checks = check_priority_list(data.ghosts_to_be_checked, data.ghosts_to_be_checked_again, check_ghost, max_checks_per_tick)
+  local remaining_checks = check_priority_list(data.ghosts_to_be_checked, data.ghosts_to_be_checked_again, check_ghost, max_important_checks_per_tick)
   data.ghost_check_index = check_list(data.ghosts_to_be_checked_again, data.ghost_check_index, check_ghost, remaining_checks)
 
 end
@@ -879,9 +880,15 @@ local check_upgrade_lists = function()
 end
 
 local check_proxy = function(entity)
-  if not (entity and entity.valid) then print("Proxy not valid") return true end
+  if not (entity and entity.valid) then
+    print("Proxy not valid")
+    return true
+  end
   local target = entity.proxy_target
-  if not (target and target.valid) then print("Proxy target not valid") return true end
+  if not (target and target.valid) then
+    print("Proxy target not valid")
+    return true
+  end
 
   --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
 
@@ -1059,7 +1066,7 @@ end
 
 local check_deconstruction_lists = function()
 
-  local remaining_checks = check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, max_checks_per_tick)
+  local remaining_checks = check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, max_important_checks_per_tick)
   data.deconstruction_check_index = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction, remaining_checks)
 
 end
