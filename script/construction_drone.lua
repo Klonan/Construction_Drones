@@ -519,9 +519,11 @@ local mine_entity = function(inventory, target)
     
     local products = prototype.mineable_properties.products
     
-    if products[1] and not inventory.can_insert(products[1]) then
-      --We can't insert even 1 of the result products
-      return
+    if products then
+      if products[1] and not inventory.can_insert(products[1]) then
+        --We can't insert even 1 of the result products
+        return
+      end
     end
 
   local destroyed = target.destroy(destroy_param)
