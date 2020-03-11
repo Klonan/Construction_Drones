@@ -2283,8 +2283,11 @@ process_drone_command = function(drone_data, result)
   --print(string.. " | "..drone.unit_number)
   --end
 --print("Processing drone command")
-
-  drone.speed = drone.prototype.speed * ( 1 + (math.random() - 0.5) / 4)
+  if drone_data.character and drone_data.character.valid then
+    drone.speed = drone_data.character.character_running_speed * 1.2
+  else
+    drone.speed = drone.prototype.speed * ( 1 + (math.random() - 0.5) / 4)
+  end
 
   if (result == defines.behavior_result.fail) then
   --print("Fail")
