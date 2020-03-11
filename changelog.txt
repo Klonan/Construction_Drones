@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.4.5
+Date: 2020-03-11
+  Changes:
+    - Remove the technology, make the recipe available from the start.
+    - Raise events on tile construciton and deconstruction.
+---------------------------------------------------------------------------------------------------
 Version: 0.4.4
 Date: 2020-02-22
   Changes:
