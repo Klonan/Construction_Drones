@@ -2063,25 +2063,57 @@ local process_construct_tile_command = function(drone_data)
   local position = target.position
   local surface = target.surface
 
-  local tile = target.surface.get_tile(position.x, position.y)
+  local tile = surface.get_tile(position.x, position.y)
   local current_prototype = tile.prototype
   local products = current_prototype.mineable_properties.products
+  local target_tile_name = target.ghost_name
+  --[[
+    
+on_robot_built_tile
+
+Called after a robot builds tiles.
+
+Contains
+robot :: LuaEntity: The robot.
+tiles :: array of OldTileAndPosition: The position data.
+tile :: LuaTilePrototype: The tile prototype that was placed.
+item :: LuaItemPrototype: The item type used to build the tiles.
+stack :: LuaItemStack: The stack used to build the tiles (may be empty if all of the items where used to build the tiles).
+surface_index :: uint: The surface the tile(s) are build on.
+  ]]
 
   clear_target_data(target.unit_number)
-  surface.set_tiles({{name = target.ghost_name, position = position}}, true)
+  local event_data = 
+  {
+    robot = nil,
+    tiles =
+    {
+      {
+        old_tile = current_prototype,
+        position = {x = math.floor(position.x), y = math.floor(position.y)}
+      }
+    },
+    tile = game.tile_prototypes[target_tile_name],
+    surface_index = target.surface.index
+  }
+  surface.set_tiles({{name = target_tile_name, position = position}}, true)
+  script.raise_event(defines.events.on_robot_built_tile, event_data)
 
-  local drone_inventory = get_drone_inventory(drone_data)
-  drone_inventory.remove({name = drone_data.item_used_to_place, count = 1})
+  if surface.get_tile(position).name == target_tile_name then
+    --was successful
+    local drone_inventory = get_drone_inventory(drone_data)
+    drone_inventory.remove({name = drone_data.item_used_to_place, count = 1})
 
-  local insert = drone_inventory.insert
-  if products then
-    for k, product in pairs (products) do
-      local stack = stack_from_product(product)
-      if stack then
-        insert(stack)
+    local insert = drone_inventory.insert
+    if products then
+      for k, product in pairs (products) do
+        local stack = stack_from_product(product)
+        if stack then
+          insert(stack)
+        end
       end
+      drone_data.dropoff = {}
     end
-    drone_data.dropoff = {}
   end
 
   update_drone_sticker(drone_data)
@@ -2145,20 +2177,37 @@ local process_deconstruct_tile_command = function(drone_data)
   local tile = surface.get_tile(position.x, position.y)
   local current_prototype = tile.prototype
   local products = current_prototype.mineable_properties.products
-
   local hidden = tile.hidden_tile or "out-of-map"
+
+  local event_data = 
+  {
+    tiles =
+    {
+      {
+        old_tile = current_prototype,
+        position = {x = math.floor(position.x), y = math.floor(position.y)}
+      }
+    },
+    surface_index = surface.index
+  }
+  
   surface.set_tiles({{name = hidden, position = position}}, true)
+  script.raise_event(defines.events.on_robot_mined_tile, event_data)
   target.destroy()
 
-  local drone_inventory = get_drone_inventory(drone_data)
-  local insert = drone_inventory.insert
-  if products then
-    for k, product in pairs (products) do
-      local stack = stack_from_product(product)
-      if stack then
-        insert(stack)
+  if surface.get_tile(position).name == hidden then
+    --Succesful
+    local drone_inventory = get_drone_inventory(drone_data)
+    local insert = drone_inventory.insert
+    if products then
+      for k, product in pairs (products) do
+        local stack = stack_from_product(product)
+        if stack then
+          insert(stack)
+        end
       end
     end
+
   end
 
   local target = get_extra_target(drone_data)
