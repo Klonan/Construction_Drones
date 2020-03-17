@@ -81,6 +81,7 @@ local unit = {
     animation = animation
   },
   vision_distance = 100,
+  not_controllable = true,
   movement_speed = 0.16,
   distance_per_frame = 0.1,
   pollution_to_join_attack = 20000000,

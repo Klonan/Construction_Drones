@@ -2676,18 +2676,11 @@ lib.on_init = function()
   resetup_ghosts()
   setup_characters()
 
-  if remote.interfaces["unit_control"] then
-    remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
-  end
   update_non_repairable_entities()
 end
 
 lib.on_configuration_changed = function()
   game.map_settings.path_finder.use_path_cache = false
-
-  if remote.interfaces["unit_control"] then
-    remote.call("unit_control", "register_unit_unselectable", names.units.construction_drone)
-  end
 
   if data.idle_drones then
     for k, drones in pairs (data.idle_drones) do
