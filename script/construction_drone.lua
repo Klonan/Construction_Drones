@@ -425,7 +425,7 @@ local contents = function(entity)
 
   local max_line_index = belt_connectible_type[entity.type]
   if max_line_index then
-    get_transport_line = entity.get_transport_line
+    local get_transport_line = entity.get_transport_line
     for k = 1, max_line_index do
       local transport_line = get_transport_line(k)
       if transport_line then
@@ -617,7 +617,7 @@ local check_list = function(list, index, check_function, count)
   if not index then return end
   while count > 0 do
     local this_index = index
-    entry = list[this_index]
+    local entry = list[this_index]
     --TODO maybe change the index when doing the extra target logic
     if not entry then return nil end
     index = next(list, this_index)
@@ -639,6 +639,7 @@ local remove_from_list = function(list, index, global_index)
   return global_index
 end
 
+local drone_stack_capacity
 local get_drone_stack_capacity = function(force)
   --Deliberately not local
   drone_stack_capacity = drone_stack_capacity or game.entity_prototypes[proxy_name].get_inventory_size(defines.inventory.chest)
@@ -1115,6 +1116,7 @@ local check_tile_deconstruction_lists = function()
 
 end
 
+local repair_items
 local get_repair_items = function()
   if repair_items then return repair_items end
   --Deliberately not 'local'
