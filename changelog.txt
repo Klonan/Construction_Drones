@@ -2,7 +2,7 @@
 Version: 0.4.7
 Date: 2020-03-19
   Changes:
-    - Fixed drones not deploying with some bob classes mod.
+    - Fixed some deep desync.
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.6
 Date: 2020-03-17

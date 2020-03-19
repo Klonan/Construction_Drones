@@ -18,7 +18,7 @@ drone_prototypes =
 }
 
 local unique_index = function(entity)
-  if entity.unit_number then return entity.unit_number end
+  if entity.unit_number then return tostring(entity.unit_number) end
   return entity.surface.index..entity.name..entity.position.x..entity.position.y
 end
 
@@ -32,8 +32,8 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_checks_per_tick = 2
-local max_important_checks_per_tick = 5
+local max_checks_per_tick = 1
+local max_important_checks_per_tick = 3
 
 local drone_pathfind_flags =
 {
