@@ -2,7 +2,7 @@
 Version: 0.4.9
 Date: 2020-04-01
   Changes:
-    - Fixed dumb error I forgot about.
+    - Some global reference fixes.
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.8
 Date: 2020-03-19
@@ -23,7 +23,7 @@ Version: 0.4.5
 Date: 2020-03-11
   Changes:
     - Remove the technology, make the recipe available from the start.
-    - Raise events on tile construciton and deconstruction.
+    - Raise events on tile construction and deconstruction.
 ---------------------------------------------------------------------------------------------------
 Version: 0.4.4
 Date: 2020-02-22
