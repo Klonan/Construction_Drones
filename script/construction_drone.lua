@@ -786,6 +786,12 @@ end
 local on_built_entity = function(event)
   local entity = event.created_entity or event.ghost or event.entity
   if not (entity and entity.valid) then return end
+
+  local player = game.get_player(event.player_index)
+  if player and player.character then
+    add_character(player.character)
+  end
+
   local entity_type = entity.type
 
   if entity_type == ghost_type then
@@ -2653,6 +2659,7 @@ lib.events =
   [defines.events.on_player_toggled_map_editor] = on_player_created,
   [defines.events.on_player_respawned] = on_player_created,
   [defines.events.on_player_changed_surface] = on_player_created,
+  [defines.events.on_player_driving_changed_state] = on_player_created,
 
   [defines.events.on_ai_command_completed] = on_ai_command_completed,
   [defines.events.on_marked_for_deconstruction] = on_marked_for_deconstruction,

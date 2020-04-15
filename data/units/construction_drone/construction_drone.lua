@@ -7,7 +7,6 @@ local animation =
 {
   layers =
   {
-    walk =
     {
       filename = path.."drone_walk.png",
       line_length = 16,
@@ -19,7 +18,6 @@ local animation =
       scale = 0.4,
       shift = util.by_pixel(0, -14),
     },
-    walk_shadow =
     {
       filename = path.."drone_shadow.png",
       width = 142,
