@@ -787,9 +787,11 @@ local on_built_entity = function(event)
   local entity = event.created_entity or event.ghost or event.entity
   if not (entity and entity.valid) then return end
 
-  local player = game.get_player(event.player_index)
-  if player and player.character then
-    add_character(player.character)
+  if event.player_index then
+    local player = game.get_player(event.player_index)
+    if player and player.character then
+      add_character(player.character)
+    end
   end
 
   local entity_type = entity.type
