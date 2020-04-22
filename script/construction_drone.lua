@@ -121,16 +121,6 @@ local add_character = function(character)
   data.characters[unique_index(character)] = character
 end
 
-local get_characters = function()
-  local characters = data.characters
-  for k, character in pairs (characters) do
-    if not character.valid then
-      characters[k] = nil
-    end
-  end
-  return characters
-end
-
 local can_character_spawn_drones = function(character)
   if character.vehicle then return end
 
@@ -156,9 +146,12 @@ local get_characters_for_entity = function(entity, optional_force, predicate)
   --matches force and surface
   local force = optional_force or entity.force
   local surface = entity.surface
+  local characters = data.characters
   local new_characters = {}
-  for k, character in pairs (get_characters()) do
-    if character.force == force and character.surface == surface and can_character_spawn_drones(character) and (not predicate or predicate(character, entity)) then
+  for k, character in pairs (characters) do
+    if not character.valid then
+      characters[k] = nil
+    elseif character.force == force and character.surface == surface and can_character_spawn_drones(character) and (not predicate or predicate(character, entity)) then
       new_characters[k] = character
     end
   end
