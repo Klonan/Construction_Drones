@@ -32,8 +32,8 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_checks_per_tick = 10
-local max_important_checks_per_tick = 10
+local max_important_checks_per_tick = 5
+local max_checks_per_tick = 2
 
 local drone_pathfind_flags =
 {
@@ -124,15 +124,12 @@ end
 local can_character_spawn_drones = function(character)
   if character.vehicle then return end
 
-  if character.allow_dispatching_robots then
-    local network = character.logistic_network
-    if network then
-      if network.all_construction_robots > 0 then
-        return
-      end
+  if character.player then
+    if not character.player.is_shortcut_toggled("construction-drone-toggle") then
+      return
     end
   end
-
+  
   local count = character.get_item_count(names.units.construction_drone) - (data.request_count[character.unit_number] or 0)
   return count > 0
 end
@@ -809,13 +806,6 @@ end
 local on_built_entity = function(event)
   local entity = event.created_entity or event.ghost or event.entity
   if not (entity and entity.valid) then return end
-
-  if event.player_index then
-    local player = game.get_player(event.player_index)
-    if player and player.character then
-      add_character(player.character)
-    end
-  end
 
   local entity_type = entity.type
 
@@ -2725,6 +2715,16 @@ local update_non_repairable_entities = function()
   set_damaged_event_filter()
 end
 
+local on_lua_shortcut = function(event)
+  if event.prototype_name ~= "construction-drone-toggle" then return end
+  local player = game.get_player(event.player_index)
+  if player.character then
+    add_character(player.character)
+  end
+  
+  player.set_shortcut_toggled("construction-drone-toggle", not player.is_shortcut_toggled("construction-drone-toggle"))
+end
+
 local lib = {}
 
 lib.events =
@@ -2754,6 +2754,7 @@ lib.events =
   [defines.events.on_entity_cloned] = on_entity_cloned,
 
   [defines.events.on_script_path_request_finished] = on_script_path_request_finished,
+  [defines.events.on_lua_shortcut] = on_lua_shortcut,
 }
 
 lib.on_load = function()
