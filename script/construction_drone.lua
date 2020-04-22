@@ -92,11 +92,12 @@ local get_prototype = function(name)
 end
 
 local sin, cos = math.sin, math.cos
+local angle = util.angle
 
 local get_beam_orientation = function(source_position, target_position)
 
     -- Angle in rads
-    local angle = util.angle(target_position, source_position)
+    local angle = angle(target_position, source_position)
 
     -- Convert to orientation
     local orientation =  (angle / (2 * math.pi)) - 0.25
@@ -164,11 +165,21 @@ local get_characters_for_entity = function(entity, optional_force, predicate)
   return new_characters
 end
 
+local is_in_range = function(position_1, position_2)
+  local dx = position_1.x - position_2.x
+  local dy = position_1.y - position_2.y
+  if dx > drone_range then return end
+  if dy > drone_range then return end
+  if dx < -drone_range then return end
+  if dy < -drone_range then return end
+  return true
+end
+
 
 local get_characters_in_distance = function(entity, optional_force)
   local origin = entity.position
   local predicate = function(character)
-    return rect_dist(origin, character.position) <= drone_range
+    return is_in_range(origin, character.position)
   end
   return get_characters_for_entity(entity, optional_force, predicate)
 end
