@@ -359,6 +359,12 @@ end
 local transfer_stack = function(destination, source_entity, stack)
   --print("Want: "..stack.count)
   --print("Have: "..source_entity.get_item_count(stack.name))
+
+  if source_entity.type == "character" and source_entity.cheat_mode then
+    destination.insert(stack)
+    return stack.count
+  end
+
   stack.count = math.min(stack.count, source_entity.get_item_count(stack.name))
   if stack.count == 0 then return 0 end
   local transferred = 0
@@ -668,7 +674,7 @@ local get_character_point = function(prototype, entity)
 
   for k, character in pairs (characters) do
     for k, item in pairs(items) do
-      if character.get_item_count(item.name) >= item.count then
+      if character.get_item_count(item.name) >= item.count or character.cheat_mode then
         return character, item
       end
     end
@@ -951,7 +957,7 @@ local check_proxy = function(entity)
     needed = needed + 1
     local selected_character
     for k, character in pairs (characters) do
-      if character.get_item_count(name) > 0 then
+      if character.get_item_count(name) > 0 or character.cheat_mode then
         selected_character = character
         break
       end
@@ -1000,7 +1006,7 @@ local check_cliff_deconstruction = function(deconstruct)
   local characters = get_characters_in_distance(entity, force)
 
   for k, character in pairs (characters) do
-    if character.get_item_count(cliff_destroying_item) == 0 then
+    if character.get_item_count(cliff_destroying_item) == 0 or (not character.cheat_mode) then
       --game.print("no item for this guy")
       characters[k] = nil
     end
@@ -1216,7 +1222,7 @@ local check_repair = function(entity)
   local repair_items = get_repair_items()
   for k, character in pairs (characters) do
     for name, item in pairs (repair_items) do
-      if character.get_item_count(name) > 0 then
+      if character.get_item_count(name) > 0 or character.cheat_mode then
         selected_character = character
         repair_item = item
         break
