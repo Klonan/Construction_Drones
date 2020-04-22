@@ -2715,14 +2715,46 @@ local update_non_repairable_entities = function()
   set_damaged_event_filter()
 end
 
+local scan_for_nearby_jobs = function(entity, radius)
+
+  local ghosts = entity.surface.find_entities_filtered{name = "entity-ghost", position = entity.position, radius = radius, force = entity.force}
+
+  for k, ghost in pairs (ghosts) do
+    local unit_number = ghost.unit_number
+    if data.ghosts_to_be_checked_again[unit_number] then
+      data.ghosts_to_be_checked[unit_number] = ghost
+    end
+  end
+
+  local decons = entity.surface.find_entities_filtered{position = entity.position, radius = radius, to_be_deconstructed = true}
+
+  for k, decon in pairs (decons) do
+    local index = unique_index(decon)
+    if data.deconstructs_to_be_checked_again[index] then
+      data.deconstructs_to_be_checked[index] = {entity = decon, force = entity.force}
+    end
+  end
+
+end
+
 local on_lua_shortcut = function(event)
   if event.prototype_name ~= "construction-drone-toggle" then return end
   local player = game.get_player(event.player_index)
   if player.character then
     add_character(player.character)
   end
+
+  local enabled = player.is_shortcut_toggled("construction-drone-toggle")
+  if enabled then
+    player.set_shortcut_toggled("construction-drone-toggle", false)
+    return 
+  end
   
-  player.set_shortcut_toggled("construction-drone-toggle", not player.is_shortcut_toggled("construction-drone-toggle"))
+  player.set_shortcut_toggled("construction-drone-toggle", true)
+
+  --make the drones feel responsive by finding nearby things to work on.
+  scan_for_nearby_jobs(player.character, 50)
+
 end
 
 local lib = {}
