@@ -183,7 +183,7 @@ local get_character_for_job = function(entity, optional_force)
   if not next(characters) then return end
 
   local closest = entity.surface.get_closest(entity.position, characters)
-  if rect_dist(closest.position, entity.position) > drone_range then return end
+  if not is_in_range(closest.position, entity.position) then return end
 
   return closest
 end
