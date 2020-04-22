@@ -1071,7 +1071,7 @@ local check_deconstruction = function(deconstruct)
     local extra_targets = {}
     local count = 10
 
-    for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8}) do
+    for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8, to_be_deconstructed = true}) do
       if count <= 0 then break end
       local nearby_index = unique_index(nearby)
       local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
