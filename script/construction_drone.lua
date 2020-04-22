@@ -33,7 +33,7 @@ local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
 local max_checks_per_tick = 1
-local max_important_checks_per_tick = 3
+local max_important_checks_per_tick = 60
 
 local drone_pathfind_flags =
 {
@@ -82,6 +82,14 @@ local data =
   request_count = {}
 
 }
+
+local prototype_cache = {}
+local get_prototype = function(name)
+  if prototype_cache[name] then return prototype_cache[name] end
+  local prototype = game.entity_prototypes[name]
+  prototype_cache[name] = prototype
+  return prototype
+end
 
 local sin, cos = math.sin, math.cos
 
@@ -563,7 +571,7 @@ end
 
 local make_path_request = function(drone_data, character, target)
 
-  local prototype = game.entity_prototypes[names.units.construction_drone]
+  local prototype = get_prototype(names.units.construction_drone)
 
   local path_id = character.surface.request_path
   {
@@ -641,8 +649,8 @@ end
 
 local drone_stack_capacity
 local get_drone_stack_capacity = function(force)
-  --Deliberately not local
-  drone_stack_capacity = drone_stack_capacity or game.entity_prototypes[proxy_name].get_inventory_size(defines.inventory.chest)
+  if drone_stack_capacity then return drone_stack_capacity end
+  drone_stack_capacity = game.entity_prototypes[proxy_name].get_inventory_size(defines.inventory.chest)
   return drone_stack_capacity
 end
 
@@ -732,14 +740,16 @@ local set_drone_idle = function(drone)
 
 end
 
+
 local check_ghost = function(entity)
   if not (entity and entity.valid) then return true end
+  --game.connected_players[1].zoom_to_world(entity.position, 0.5)
   --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
   local force = entity.force
   local surface = entity.surface
   local position = entity.position
 
-  local prototype = game.entity_prototypes[entity.ghost_name]
+  local prototype = get_prototype(entity.ghost_name)
   local character, item = get_character_point(prototype, entity)
 
 --print("Checking ghost "..entity.ghost_name..random())
@@ -1928,7 +1938,7 @@ local process_upgrade_command = function(drone_data)
   clear_target_data(unit_number)
 
   local drone_inventory = get_drone_inventory(drone_data)
-  local products = game.entity_prototypes[original_name].mineable_properties.products
+  local products = get_prototype(original_name).mineable_properties.products
 
   take_product_stacks(drone_inventory, products)
 
