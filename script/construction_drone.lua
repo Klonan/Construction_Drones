@@ -1029,7 +1029,7 @@ local check_deconstruction = function(deconstruct)
   --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
   if not (force and force.valid) then return true end
 
-  if not entity.to_be_deconstructed(force) then return true end
+  if not entity.to_be_deconstructed() then return true end
 
   if entity.type == cliff_type then
     return check_cliff_deconstruction(deconstruct)
@@ -1827,7 +1827,7 @@ local process_deconstruct_command = function(drone_data)
 
   local drone = drone_data.entity
 
-  if not target.to_be_deconstructed(drone.force) then
+  if not target.to_be_deconstructed() then
     return cancel_drone_order(drone_data)
   end
 
@@ -2611,7 +2611,7 @@ local on_entity_cloned = function(event)
     return
   end
 
-  if destination.to_be_deconstructed(destination.force) then
+  if destination.to_be_deconstructed() then
     data.deconstructs_to_be_checked_again[unique_index(destination)] = {entity = destination, force = destination.force}
     data.sent_deconstruction[unique_index(destination)] = 0
   end
@@ -2729,9 +2729,11 @@ local scan_for_nearby_jobs = function(entity, radius)
   local decons = entity.surface.find_entities_filtered{position = entity.position, radius = radius, to_be_deconstructed = true}
 
   for k, decon in pairs (decons) do
-    local index = unique_index(decon)
-    if data.deconstructs_to_be_checked_again[index] then
-      data.deconstructs_to_be_checked[index] = {entity = decon, force = entity.force}
+    if decon.to_be_deconstructed() then
+      local index = unique_index(decon)
+      if data.deconstructs_to_be_checked_again[index] then
+        data.deconstructs_to_be_checked[index] = {entity = decon, force = entity.force}
+      end
     end
   end
 
