@@ -32,8 +32,8 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_checks_per_tick = 1
-local max_important_checks_per_tick = 60
+local max_checks_per_tick = 10
+local max_important_checks_per_tick = 10
 
 local drone_pathfind_flags =
 {
@@ -621,32 +621,35 @@ local check_priority_list = function(list, other_list, check_function, count)
   return count
 end
 
-local check_list = function(list, index, check_function, count)
-  if count == 0 then return index end
+local check_list = function(list, index, check_function)
   if not index then
     index = next(list)
   end
-  if not index then return end
-  while count > 0 do
-    local this_index = index
-    local entry = list[this_index]
-    --TODO maybe change the index when doing the extra target logic
-    if not entry then return nil end
-    index = next(list, this_index)
-    if entry and check_function(entry) == true then
-      list[this_index] = nil
+  if not index then return true end
+
+  local entry = list[index]
+  if check_function(entry) then
+    if not list[index] then
+      -- If he isn't in the list, he removed himself
+      return
+    else
+      local next_index = next(list, index) or true
+      list[index] = nil
+      return next_index
     end
-    count = count - 1
-    if index == nil then break end
   end
-  return index
+
+  --Need to increment the index
+  return next(list, index) or true
+  
 end
 
 local remove_from_list = function(list, index, global_index)
-  if not list[index] then return global_index end
-  if global_index and global_index == index then
+  
+  if global_index == index then
     global_index = next(list, index)
   end
+
   list[index] = nil
   return global_index
 end
@@ -772,7 +775,7 @@ local check_ghost = function(entity)
     local unit_number = ghost.unit_number
     local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
     if should_check then
-      remove_from_list(data.ghosts_to_be_checked, unit_number)
+      data.ghosts_to_be_checked[unit_number] = nil
       data.ghost_check_index = remove_from_list(data.ghosts_to_be_checked_again, unit_number, data.ghost_check_index)
       extra_targets[unit_number] = ghost
       count = count + 1
@@ -837,7 +840,17 @@ end
 local check_ghost_lists = function()
 
   local remaining_checks = check_priority_list(data.ghosts_to_be_checked, data.ghosts_to_be_checked_again, check_ghost, max_important_checks_per_tick)
-  data.ghost_check_index = check_list(data.ghosts_to_be_checked_again, data.ghost_check_index, check_ghost, remaining_checks)
+
+  while remaining_checks > 0 do
+    local result = check_list(data.ghosts_to_be_checked_again, data.ghost_check_index, check_ghost)
+    if result == true then
+      data.ghost_check_index = nil
+      break
+    elseif result ~= nil then
+      data.ghost_check_index = result
+    end
+    remaining_checks = remaining_checks - 1
+  end
 
 end
 
@@ -874,7 +887,7 @@ local check_upgrade = function(upgrade_data)
     local should_check = data.upgrade_to_be_checked[nearby_index] or data.upgrade_to_be_checked_again[nearby_index]
     if should_check then
       extra_targets[nearby_index] = nearby
-      remove_from_list(data.upgrade_to_be_checked, nearby_index)
+      data.upgrade_to_be_checked[nearby_index] = nil
       data.upgrade_check_index = remove_from_list(data.upgrade_to_be_checked_again, nearby_index, data.upgrade_check_index)
       count = count + 1
     end
@@ -900,7 +913,16 @@ end
 local check_upgrade_lists = function()
   --game.print(serpent.line(data.upgrade_to_be_checked_again))
   local remaining_checks = check_priority_list(data.upgrade_to_be_checked, data.upgrade_to_be_checked_again, check_upgrade, max_checks_per_tick)
-  data.upgrade_check_index = check_list(data.upgrade_to_be_checked_again, data.upgrade_check_index, check_upgrade, remaining_checks)
+  
+  for k = 1, remaining_checks do
+    local result = check_list(data.upgrade_to_be_checked_again, data.upgrade_check_index, check_upgrade)
+    if result == true then
+      data.upgrade_check_index = nil
+      break
+    elseif result ~= nil then
+      data.upgrade_check_index = result
+    end
+  end
 
 end
 
@@ -950,8 +972,15 @@ local check_proxy = function(entity)
 end
 
 local check_proxies_lists = function()
-
-  data.proxy_check_index = check_list(data.proxies_to_be_checked, data.proxy_check_index, check_proxy, max_checks_per_tick)
+  for k = 1, max_checks_per_tick do
+    local result = check_list(data.proxies_to_be_checked, data.proxy_check_index, check_proxy)
+    if result == true then
+      data.proxy_check_index = nil
+      break
+    elseif result ~= nil then
+      data.proxy_check_index = result
+    end
+  end
 
 end
 
@@ -1048,7 +1077,7 @@ local check_deconstruction = function(deconstruct)
       local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
       if should_check then
         extra_targets[nearby_index] = nearby
-        remove_from_list(data.deconstructs_to_be_checked, nearby_index)
+        data.deconstructs_to_be_checked[nearby_index] = nil
         data.deconstruction_check_index = remove_from_list(data.deconstructs_to_be_checked_again, nearby_index, data.deconstruction_check_index)
         count = count - 1
       end
@@ -1092,7 +1121,16 @@ end
 local check_deconstruction_lists = function()
 
   local remaining_checks = check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, max_important_checks_per_tick)
-  data.deconstruction_check_index = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction, remaining_checks)
+
+  for k = 1, remaining_checks do
+    local result = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction)
+    if result == true then
+      data.deconstruction_check_index = nil
+      break
+    elseif result ~= nil then
+      data.deconstruction_check_index = result
+    end
+  end
 
 end
 
@@ -1101,6 +1139,7 @@ local check_tile_deconstruction = function(entity)
   if not (entity and entity.valid) then return true end
 
   --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+  --game.connected_players[1].zoom_to_world(entity.position, 0.5)
 
   local character = get_character_for_job(entity)
   if not character then return end
@@ -1113,7 +1152,7 @@ local check_tile_deconstruction = function(entity)
     local should_check = data.deconstruction_proxies_to_be_checked[nearby_index]
     if should_check then
       extra_targets[nearby_index] = nearby
-      remove_from_list(data.deconstructs_to_be_checked, nearby_index)
+      data.deconstructs_to_be_checked[nearby_index] = nil
       data.deconstruction_tile_check_index = remove_from_list(data.deconstruction_proxies_to_be_checked, nearby_index, data.deconstruction_tile_check_index)
     end
   end
@@ -1133,8 +1172,16 @@ local check_tile_deconstruction = function(entity)
 end
 
 local check_tile_deconstruction_lists = function()
-
-  data.deconstruction_tile_check_index = check_list(data.deconstruction_proxies_to_be_checked, data.deconstruction_tile_check_index, check_tile_deconstruction, max_checks_per_tick)
+  
+  for k = 1, max_checks_per_tick do
+    local result = check_list(data.deconstruction_proxies_to_be_checked, data.deconstruction_tile_check_index, check_tile_deconstruction)
+    if result == true then
+      data.deconstruction_tile_check_index = nil
+      break
+    elseif result ~= nil then
+      data.deconstruction_tile_check_index = result
+    end
+  end
 
 end
 
@@ -1194,7 +1241,16 @@ end
 
 local check_repair_lists = function()
   local remaining_checks = check_priority_list(data.repair_to_be_checked, data.repair_to_be_checked_again, check_repair, max_checks_per_tick)
-  data.repair_check_index = check_list(data.repair_to_be_checked_again, data.repair_check_index, check_repair, remaining_checks)
+
+  for k = 1, remaining_checks do
+    local result = check_list(data.repair_to_be_checked_again, data.repair_check_index, check_repair)
+    if result == true then
+      data.repair_check_index = nil
+      break
+    elseif result ~= nil then
+      data.repair_check_index = result
+    end
+  end
 
 end
 
@@ -1249,13 +1305,21 @@ local check_tile = function(entity)
 end
 
 local check_tile_lists = function()
-  --Being lazy... only 1 list for tiles (also probably fine)
-  data.tile_check_index = check_list(data.tiles_to_be_checked, data.tile_check_index, check_tile, max_checks_per_tick)
+
+  for k = 1, max_checks_per_tick do
+    local result = check_list(data.tiles_to_be_checked, data.tile_check_index, check_tile)
+    if result == true then
+      data.tile_check_index = nil
+      break
+    elseif result ~= nil then
+      data.tile_check_index = result
+    end
+  end
+
 end
 
 local on_tick = function(event)
   --local profiler = game.create_profiler()
-
 
   check_deconstruction_lists()
   --game.print({"", game.tick, " deconstruction checks ", profiler})
