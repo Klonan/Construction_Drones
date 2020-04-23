@@ -628,17 +628,21 @@ local check_list = function(list, index, check_function)
   if not index then
     index = next(list)
   end
-  if not index then return true end
+  if not index then
+    return true
+  end
 
   local entry = list[index]
+  if not entry then 
+    return true
+  end
+
   if check_function(entry) then
     if not list[index] then
       -- If he isn't in the list, he removed himself
       return
     else
-      local next_index = next(list, index) or true
       list[index] = nil
-      return next_index
     end
   end
 
