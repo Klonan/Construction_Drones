@@ -3,6 +3,7 @@ Version: 0.5.2
 Date: 2020-04-25
   Changes:
     - Fix error trying to read cheat mode from a character with no player.
+    - Enable the construction drone shortcut by default.
 ---------------------------------------------------------------------------------------------------
 Version: 0.5.1
 Date: 2020-04-23

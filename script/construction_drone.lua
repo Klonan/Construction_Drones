@@ -79,7 +79,8 @@ local data =
   migrate_deconstructs = true,
   migrate_characters = true,
   path_requests = {},
-  request_count = {}
+  request_count = {},
+  set_default_shortcut = true
 
 }
 
@@ -353,7 +354,7 @@ local transport_lines = function(entity)
   return inventories
 end
 
-local is_cheat_mode(entity)
+local is_cheat_mode = function(entity)
   return entity.type == "character" and entity.player and entity.player.cheat_mode
 end
 
@@ -2596,6 +2597,7 @@ local on_player_created = function(event)
   local player = game.get_player(event.player_index)
   if player.character then
     add_character(player.character)
+    player.set_shortcut_toggled("construction-drone-toggle", true)
   end
 end
 
@@ -2767,6 +2769,13 @@ local on_lua_shortcut = function(event)
 
 end
 
+local refresh_player_event = function(event)
+  local player = game.get_player(event.player_index)
+  if player.character then
+    add_character(player.character)
+  end
+end
+
 local lib = {}
 
 lib.events =
@@ -2783,11 +2792,11 @@ lib.events =
   [defines.events.on_pre_ghost_deconstructed] = on_entity_removed,
 
   [defines.events.on_player_created] = on_player_created,
-  [defines.events.on_player_joined_game] = on_player_created,
-  [defines.events.on_player_toggled_map_editor] = on_player_created,
-  [defines.events.on_player_respawned] = on_player_created,
-  [defines.events.on_player_changed_surface] = on_player_created,
-  [defines.events.on_player_driving_changed_state] = on_player_created,
+  [defines.events.on_player_joined_game] = refresh_player_event,
+  [defines.events.on_player_toggled_map_editor] = refresh_player_event,
+  [defines.events.on_player_respawned] = refresh_player_event,
+  [defines.events.on_player_changed_surface] = refresh_player_event,
+  [defines.events.on_player_driving_changed_state] = refresh_player_event,
 
   [defines.events.on_ai_command_completed] = on_ai_command_completed,
   [defines.events.on_marked_for_deconstruction] = on_marked_for_deconstruction,
@@ -2815,6 +2824,12 @@ lib.on_init = function()
   setup_characters()
 
   update_non_repairable_entities()
+
+  
+  for k, player in pairs (game.players) do
+    player.set_shortcut_toggled("construction-drone-toggle", true)
+  end
+
 end
 
 lib.on_configuration_changed = function()
@@ -2852,6 +2867,14 @@ lib.on_configuration_changed = function()
   prune_commands()
   
   update_non_repairable_entities()
+
+  if not data.set_default_shortcut then
+    data.set_default_shortcut = true
+    for k, player in pairs (game.players) do
+      player.set_shortcut_toggled("construction-drone-toggle", true)
+    end
+  end
+
 end
 
 return lib
