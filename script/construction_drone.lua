@@ -353,11 +353,15 @@ local transport_lines = function(entity)
   return inventories
 end
 
+local is_cheat_mode(entity)
+  return entity.type == "character" and entity.player and entity.player.cheat_mode
+end
+
 local transfer_stack = function(destination, source_entity, stack)
   --print("Want: "..stack.count)
   --print("Have: "..source_entity.get_item_count(stack.name))
 
-  if source_entity.type == "character" and source_entity.cheat_mode then
+  if is_cheat_mode(source_entity) then
     destination.insert(stack)
     return stack.count
   end
@@ -675,7 +679,7 @@ local get_character_point = function(prototype, entity)
 
   for k, character in pairs (characters) do
     for k, item in pairs(items) do
-      if character.get_item_count(item.name) >= item.count or character.cheat_mode then
+      if character.get_item_count(item.name) >= item.count or is_cheat_mode(character) then
         return character, item
       end
     end
@@ -951,7 +955,7 @@ local check_proxy = function(entity)
     needed = needed + 1
     local selected_character
     for k, character in pairs (characters) do
-      if character.get_item_count(name) > 0 or character.cheat_mode then
+      if character.get_item_count(name) > 0 or is_cheat_mode(character) then
         selected_character = character
         break
       end
@@ -1000,7 +1004,7 @@ local check_cliff_deconstruction = function(deconstruct)
   local characters = get_characters_in_distance(entity, force)
 
   for k, character in pairs (characters) do
-    if character.get_item_count(cliff_destroying_item) == 0 or (not character.cheat_mode) then
+    if character.get_item_count(cliff_destroying_item) == 0 or (not is_cheat_mode(character)) then
       --game.print("no item for this guy")
       characters[k] = nil
     end
@@ -1216,7 +1220,7 @@ local check_repair = function(entity)
   local repair_items = get_repair_items()
   for k, character in pairs (characters) do
     for name, item in pairs (repair_items) do
-      if character.get_item_count(name) > 0 or character.cheat_mode then
+      if character.get_item_count(name) > 0 or is_cheat_mode(character) then
         selected_character = character
         repair_item = item
         break
@@ -2187,7 +2191,7 @@ surface_index :: uint: The surface the tile(s) are build on.
   surface.set_tiles({{name = target_tile_name, position = position}}, true)
   script.raise_event(defines.events.on_robot_built_tile, event_data)
 
-  if surface.get_tile(position).name == target_tile_name then
+  if surface.get_tile(position).name ~= current_prototype.name then
     --was successful
     local drone_inventory = get_drone_inventory(drone_data)
     drone_inventory.remove({name = drone_data.item_used_to_place, count = 1})

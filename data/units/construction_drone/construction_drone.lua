@@ -143,6 +143,13 @@ local unit = {
       intensity = 0.6,
       color = {r=1.0, g=1.0, b=1.0}
     }
+  },
+  resistances = 
+  {
+    {
+      type = "acid",
+      percent = 95
+    }
   }
 }
 
