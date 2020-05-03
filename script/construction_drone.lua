@@ -32,15 +32,16 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local max_important_checks_per_tick = 5
-local max_checks_per_tick = 2
+local priority_checks_per_tick = 1
+local max_checks_per_tick = 1
 
 local drone_pathfind_flags =
 {
   allow_destroy_friendly_entities = false,
   cache = false,
   low_priority = false,
-  prefer_straight_paths = true
+  prefer_straight_paths = true,
+  no_break = true
 }
 
 local drone_orders =
@@ -844,9 +845,9 @@ end
 
 local check_ghost_lists = function()
 
-  local remaining_checks = check_priority_list(data.ghosts_to_be_checked, data.ghosts_to_be_checked_again, check_ghost, max_important_checks_per_tick)
+  check_priority_list(data.ghosts_to_be_checked, data.ghosts_to_be_checked_again, check_ghost, priority_checks_per_tick)
 
-  while remaining_checks > 0 do
+  for k = 1, max_checks_per_tick do
     local result = check_list(data.ghosts_to_be_checked_again, data.ghost_check_index, check_ghost)
     if result == true then
       data.ghost_check_index = nil
@@ -854,7 +855,6 @@ local check_ghost_lists = function()
     elseif result ~= nil then
       data.ghost_check_index = result
     end
-    remaining_checks = remaining_checks - 1
   end
 
 end
@@ -917,9 +917,9 @@ end
 
 local check_upgrade_lists = function()
   --game.print(serpent.line(data.upgrade_to_be_checked_again))
-  local remaining_checks = check_priority_list(data.upgrade_to_be_checked, data.upgrade_to_be_checked_again, check_upgrade, max_checks_per_tick)
+  check_priority_list(data.upgrade_to_be_checked, data.upgrade_to_be_checked_again, check_upgrade, priority_checks_per_tick)
   
-  for k = 1, remaining_checks do
+  for k = 1, max_checks_per_tick do
     local result = check_list(data.upgrade_to_be_checked_again, data.upgrade_check_index, check_upgrade)
     if result == true then
       data.upgrade_check_index = nil
@@ -1125,9 +1125,9 @@ end
 
 local check_deconstruction_lists = function()
 
-  local remaining_checks = check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, max_important_checks_per_tick)
+  check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, priority_checks_per_tick)
 
-  for k = 1, remaining_checks do
+  for k = 1, max_checks_per_tick do
     local result = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction)
     if result == true then
       data.deconstruction_check_index = nil
@@ -1245,9 +1245,10 @@ local check_repair = function(entity)
 end
 
 local check_repair_lists = function()
-  local remaining_checks = check_priority_list(data.repair_to_be_checked, data.repair_to_be_checked_again, check_repair, max_checks_per_tick)
 
-  for k = 1, remaining_checks do
+  check_priority_list(data.repair_to_be_checked, data.repair_to_be_checked_again, check_repair, priority_checks_per_tick)
+
+  for k = 1, max_checks_per_tick do
     local result = check_list(data.repair_to_be_checked_again, data.repair_check_index, check_repair)
     if result == true then
       data.repair_check_index = nil
@@ -1505,15 +1506,12 @@ local floor = math.floor
 
 local move_to_order_target = function(drone_data, target, range)
 
-
   local drone = drone_data.entity
 
   if drone.surface ~= target.surface then
     cancel_drone_order(drone_data)
     return
   end
-
-
 
   if in_construction_range(drone, target, range) then
     return true
@@ -1798,33 +1796,22 @@ local process_construct_command = function(drone_data)
 end
 
 local process_failed_command = function(drone_data)
-  --game.speed = 0.1
 
   local drone = drone_data.entity
-  --print(drone.ai_settings.path_resolution_modifier)
-  --Sometimes they just fail for unrelated reasons, lets give them a few chances
-  drone_data.fail_count = (drone_data.fail_count or 0) + 1
-  drone.ai_settings.path_resolution_modifier = math.min(4, drone.ai_settings.path_resolution_modifier + 1)
-  --game.print("Set resolution: "..drone.ai_settings.path_resolution_modifier)
-  if drone_data.fail_count < 10 then
+
+  drone.ai_settings.path_resolution_modifier = drone.ai_settings.path_resolution_modifier + 1
+  
+  if drone.ai_settings.path_resolution_modifier <= 3 then
     return drone_wait(drone_data, 10)
   end
 
-  --We REALLY can't get to it or something, tell the player to come sort it out...
-  if true then
-    drone_data.fail_count = nil
-    local position = drone.surface.find_non_colliding_position(drone.name, drone.position, 0, 2)
-    drone.teleport(position)
-    return cancel_drone_order(drone_data)
-  end
-  local target = drone_data.target
-  if target and target.valid then
-    target.surface.create_entity{name = "tutorial-flying-text", position = target.position, text = "Can't reach me "..drone.unit_number}
-  end
-  for k, player in pairs (drone.force.connected_players) do
-    player.add_custom_alert(drone, {type = "item", name = drone.name}, "Drone cannot reach target.", true)
-  end
-  return drone_wait(drone_data, 300)
+  
+  cancel_drone_order(drone_data, true)
+  drone.ai_settings.path_resolution_modifier = 0
+  drone_wait(drone_data, 10)
+
+  data.drone_commands[drone.unit_number] = nil
+
 end
 
 local process_deconstruct_command = function(drone_data)
