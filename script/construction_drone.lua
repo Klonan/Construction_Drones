@@ -1807,16 +1807,12 @@ local process_failed_command = function(drone_data)
 
   drone.ai_settings.path_resolution_modifier = drone.ai_settings.path_resolution_modifier + 1
   
-  if drone.ai_settings.path_resolution_modifier <= 3 then
-    return drone_wait(drone_data, 10)
+  if drone.ai_settings.path_resolution_modifier <= 4 then
+    return drone_wait(drone_data, 107)
   end
-
   
   cancel_drone_order(drone_data, true)
-  drone.ai_settings.path_resolution_modifier = 0
-  drone_wait(drone_data, 10)
-
-  data.drone_commands[drone.unit_number] = nil
+  process_return_to_character_command(drone_data, true)
 
 end
 
@@ -2364,7 +2360,7 @@ local directions =
   [defines.direction.northwest] = {-1, -1},
 }
 
-process_return_to_character_command = function(drone_data)
+process_return_to_character_command = function(drone_data, force)
 
 --print("returning to dude")
 
@@ -2373,7 +2369,7 @@ process_return_to_character_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
-  if not move_to_order_target(drone_data, target, ranges.return_to_character) then
+  if not (force or move_to_order_target(drone_data, target, ranges.return_to_character)) then
     return
   end
 
