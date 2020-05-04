@@ -631,9 +631,11 @@ local check_priority_list = function(list, other_list, check_function, count)
 end
 
 local check_list = function(list, index, check_function)
+
   if not index then
     index = next(list)
   end
+
   if not index then
     return true
   end
@@ -646,14 +648,18 @@ local check_list = function(list, index, check_function)
   if check_function(entry) then
     if not list[index] then
       -- If he isn't in the list, he removed himself
+      -- And he should have incremented the global index himself.
       return
     else
+      --Remove him from the list, increment the index ourselves.
+      next_index = next(list, index)
       list[index] = nil
+      return next_index
     end
   end
 
   --Need to increment the index
-  return next(list, index) or true
+  return list[index] and next(list, index) or true
   
 end
 
