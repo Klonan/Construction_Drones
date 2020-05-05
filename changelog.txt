@@ -3,6 +3,7 @@ Version: 0.5.5
 Date: 2020-05-05
   Changes:
     - A different method of trying to prevent drones getting stuck and losing their player.
+    - Another fix to drones being unresponsive.
 ---------------------------------------------------------------------------------------------------
 Version: 0.5.4
 Date: 2020-05-04

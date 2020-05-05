@@ -646,11 +646,7 @@ local check_list = function(list, index, check_function)
   end
 
   if check_function(entry) then
-    if not list[index] then
-      -- If he isn't in the list, he removed himself
-      -- And he should have incremented the global index himself.
-      return
-    else
+    if list[index] then
       --Remove him from the list, increment the index ourselves.
       next_index = next(list, index)
       list[index] = nil
@@ -658,8 +654,10 @@ local check_list = function(list, index, check_function)
     end
   end
 
+  if not list[index] then return end
+  
   --Need to increment the index
-  return list[index] and next(list, index) or true
+  return next(list, index) or true
   
 end
 
@@ -770,7 +768,7 @@ end
 local check_ghost = function(entity)
   if not (entity and entity.valid) then return true end
   --game.connected_players[1].zoom_to_world(entity.position, 0.5)
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = data.ghost_check_index or "nil"}
   local force = entity.force
   local surface = entity.surface
   local position = entity.position
