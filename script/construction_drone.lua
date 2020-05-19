@@ -32,7 +32,7 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local priority_checks_per_tick = 1
+local priority_checks_per_tick = 2
 local max_checks_per_tick = 1
 
 local drone_pathfind_flags =
@@ -1803,12 +1803,14 @@ local process_failed_command = function(drone_data)
 
   local drone = drone_data.entity
 
-  drone.ai_settings.path_resolution_modifier = drone.ai_settings.path_resolution_modifier + 1
-  
-  if drone.ai_settings.path_resolution_modifier <= 4 then
+  local modifier = drone.ai_settings.path_resolution_modifier
+
+  if modifier <= 3 then
+    drone.ai_settings.path_resolution_modifier = modifier + 1
     return drone_wait(drone_data, 107)
   end
-  
+
+  drone.ai_settings.path_resolution_modifier = 0  
   cancel_drone_order(drone_data, true)
   process_return_to_character_command(drone_data, true)
 
