@@ -2176,7 +2176,8 @@ surface_index :: uint: The surface the tile(s) are build on.
       }
     },
     tile = game.tile_prototypes[target_tile_name],
-    surface_index = target.surface.index
+    surface_index = target.surface.index,
+    item = drone_data.item_used_to_place
   }
   surface.set_tiles({{name = target_tile_name, position = position}}, true)
   script.raise_event(defines.events.on_robot_built_tile, event_data)
