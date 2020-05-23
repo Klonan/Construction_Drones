@@ -2149,37 +2149,10 @@ local process_construct_tile_command = function(drone_data)
   local current_prototype = tile.prototype
   local products = current_prototype.mineable_properties.products
   local target_tile_name = target.ghost_name
-  --[[
-    
-on_robot_built_tile
-
-Called after a robot builds tiles.
-
-Contains
-robot :: LuaEntity: The robot.
-tiles :: array of OldTileAndPosition: The position data.
-tile :: LuaTilePrototype: The tile prototype that was placed.
-item :: LuaItemPrototype: The item type used to build the tiles.
-stack :: LuaItemStack: The stack used to build the tiles (may be empty if all of the items where used to build the tiles).
-surface_index :: uint: The surface the tile(s) are build on.
-  ]]
 
   clear_target_data(target.unit_number)
-  local event_data = 
-  {
-    robot = nil,
-    tiles =
-    {
-      {
-        old_tile = current_prototype,
-        position = {x = math.floor(position.x), y = math.floor(position.y)}
-      }
-    },
-    tile = game.tile_prototypes[target_tile_name],
-    surface_index = target.surface.index
-  }
-  surface.set_tiles({{name = target_tile_name, position = position}}, true)
-  script.raise_event(defines.events.on_robot_built_tile, event_data)
+
+  surface.set_tiles({{name = target_tile_name, position = position}}, true, false, false, true)
 
   if surface.get_tile(position).name ~= current_prototype.name then
     --was successful
@@ -2260,20 +2233,8 @@ local process_deconstruct_tile_command = function(drone_data)
   local current_prototype = tile.prototype
   local products = current_prototype.mineable_properties.products
   local hidden = tile.hidden_tile or "out-of-map"
-
-  local event_data = 
-  {
-    tiles =
-    {
-      {
-        old_tile = current_prototype,
-        position = {x = math.floor(position.x), y = math.floor(position.y)}
-      }
-    },
-    surface_index = surface.index
-  }
   
-  surface.set_tiles({{name = hidden, position = position}}, true)
+  surface.set_tiles({{name = hidden, position = position}}, true, false, false, true)
   script.raise_event(defines.events.on_robot_mined_tile, event_data)
   target.destroy()
 
