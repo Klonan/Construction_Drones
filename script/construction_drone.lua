@@ -297,7 +297,6 @@ local is_cheat_mode = function(entity)
 end
 
 local can_player_spawn_drones = function(player)
-  if player.vehicle then return end
 
   if not player.is_shortcut_toggled("construction-drone-toggle") then
     return
@@ -1010,8 +1009,8 @@ end
 
 local scan_for_nearby_jobs = function(player, area)
   --game.print(serpent.line(area))
-  player.surface.create_entity{name = "flying-text", position = {area[1][1], area[1][2]}, text = "lt"}
-  player.surface.create_entity{name = "flying-text", position = {area[2][1], area[2][2]}, text = "rb"}
+  player.surface.create_entity{name = "tutorial-flying-text", position = {area[1][1], area[1][2]}, text = "["}
+  player.surface.create_entity{name = "tutorial-flying-text", position = {area[2][1], area[2][2]}, text = "]"}
   local job_queue = data.job_queue
 
   local player_index = player.index
@@ -1113,8 +1112,8 @@ end
 
 
 
-local div = 8
-local r = 64 / div
+local div = 5
+local r = 60 / div
 local search_offsets = {}
 
 for y = -div, div - 1 do
@@ -1126,6 +1125,8 @@ end
 
 table.sort(search_offsets, function(a, b) return distance(a[1], {0,0}) < distance(b[1], {0,0}) end)
 
+local search_refresh = #search_offsets
+
 local check_search_queue = function()
   local index, search_data = next(data.search_queue)
   if not index then return end
@@ -1135,6 +1136,7 @@ local check_search_queue = function()
   if not player then return end
   local index = search_data.area_index
   local area = search_offsets[index]
+  if not area then return end
   local position = player.position
   local search_area = {{area[1][1] + position.x, area[1][2] + position.y}, {area[2][1] + position.x, area[2][2] + position.y}}
   scan_for_nearby_jobs(player, search_area)
@@ -1169,7 +1171,7 @@ local on_tick = function(event)
 
   check_search_queue()
 
-  if game.tick % 60 == 0 then
+  if game.tick % search_refresh == 0 then
     schedule_new_searches()
   end
 
@@ -1298,7 +1300,7 @@ local move_to_player = function(drone_data, player, range)
     return
   end
 
-  if distance(drone.position, player.position) < 2 then
+  if distance(drone.position, player.position) < 1 then
     return true
   end
 
@@ -1307,7 +1309,7 @@ local move_to_player = function(drone_data, player, range)
     type = defines.command.go_to_location,
     destination_entity = player.character or nil,
     destination = (not player.character and player.position) or nil,
-    radius = 2,
+    radius = 1,
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }

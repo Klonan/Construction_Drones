@@ -226,7 +226,7 @@ util.flying_unit_collision_mask = function()
 end
 
 util.ground_unit_collision_mask = function()
-  return {"not-colliding-with-itself", "player-layer", "train-layer"}
+  return {"not-colliding-with-itself", "doodad-layer", "object-layer"}
 end
 
 util.projectile_collision_mask = function()
