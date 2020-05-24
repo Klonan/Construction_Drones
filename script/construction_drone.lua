@@ -18,7 +18,7 @@ drone_prototypes =
 }
 
 local unique_index = function(entity)
-  if entity.unit_number then return tostring(entity.unit_number) end
+  if entity.unit_number then return entity.unit_number end
   return entity.surface.index..entity.name..entity.position.x..entity.position.y
 end
 
@@ -51,8 +51,6 @@ local drone_orders =
   repair = 3,
   upgrade = 4,
   request_proxy = 5,
-  tile_construct = 6,
-  tile_deconstruct = 7,
   cliff_deconstruct = 8,
   follow = 9,
   return_to_character = 10
@@ -60,28 +58,19 @@ local drone_orders =
 
 local data =
 {
-  ghosts_to_be_checked = {},
-  ghosts_to_be_checked_again = {},
-  deconstructs_to_be_checked = {},
-  deconstructs_to_be_checked_again = {},
-  repair_to_be_checked = {},
-  repair_to_be_checked_again = {},
-  upgrade_to_be_checked = {},
-  upgrade_to_be_checked_again = {},
-  proxies_to_be_checked = {},
-  tiles_to_be_checked = {},
-  deconstruction_proxies_to_be_checked = {},
   drone_commands = {},
   targets = {},
   sent_deconstruction = {},
   debug = false,
   proxy_chests = {},
-  characters = {},
   migrate_deconstructs = true,
   migrate_characters = true,
   path_requests = {},
   request_count = {},
-  set_default_shortcut = true
+  set_default_shortcut = true,
+  job_queue = {},
+  already_targeted = {},
+  search_queue = {}
 
 }
 
@@ -118,43 +107,9 @@ local get_beam_orientation = function(source_position, target_position)
 
 end
 
-local add_character = function(character)
-  if not (character and character.valid) then return end
-  data.characters[unique_index(character)] = character
-end
-
-local can_character_spawn_drones = function(character)
-  if character.vehicle then return end
-
-  if character.player then
-    if not character.player.is_shortcut_toggled("construction-drone-toggle") then
-      return
-    end
-  end
-  
-  local count = character.get_item_count(names.units.construction_drone) - (data.request_count[character.unit_number] or 0)
-  return count > 0
-end
-
 local abs = math.abs
 local rect_dist = function(position_1, position_2)
   return abs(position_1.x - position_2.x) + abs(position_1.y - position_2.y)
-end
-
-local get_characters_for_entity = function(entity, optional_force, predicate)
-  --matches force and surface
-  local force = optional_force or entity.force
-  local surface = entity.surface
-  local characters = data.characters
-  local new_characters = {}
-  for k, character in pairs (characters) do
-    if not character.valid then
-      characters[k] = nil
-    elseif character.force == force and character.surface == surface and can_character_spawn_drones(character) and (not predicate or predicate(character, entity)) then
-      new_characters[k] = character
-    end
-  end
-  return new_characters
 end
 
 local is_in_range = function(position_1, position_2)
@@ -167,32 +122,12 @@ local is_in_range = function(position_1, position_2)
   return true
 end
 
-
-local get_characters_in_distance = function(entity, optional_force)
-  local origin = entity.position
-  local predicate = function(character)
-    return is_in_range(origin, character.position)
-  end
-  return get_characters_for_entity(entity, optional_force, predicate)
-end
-
-local get_character_for_job = function(entity, optional_force)
-  local characters = get_characters_for_entity(entity, optional_force)
-
-  if not next(characters) then return end
-
-  local closest = entity.surface.get_closest(entity.position, characters)
-  if not is_in_range(closest.position, entity.position) then return end
-
-  return closest
-end
-
 local get_drone_radius = function()
   return 0.3
 end
 
 local print = function(string)
-  if not data.debug then return end
+  --if not data.debug then return end
   local tick = game.tick
   log(tick.." | "..string)
   game.print(tick.." | "..string)
@@ -223,8 +158,6 @@ local get_radius = function(entity, range)
   local type = entity.type
   if type == ghost_type then
     radius = get_radius_map()[entity.ghost_name]
-  elseif type == tile_deconstruction_proxy then
-    radius = 0
   elseif type == cliff_type then
     radius = entity.get_radius() * 2
   --elseif entity.name == drone_name then
@@ -248,7 +181,11 @@ local get_radius = function(entity, range)
 end
 
 local distance = function(position_1, position_2)
-  return (((position_2.x - position_1.x) * (position_2.x - position_1.x)) + ((position_2.y - position_1.y) * (position_2.y - position_1.y))) ^ 0.5
+  local x1 = position_1[1] or position_1.x
+  local y1 = position_1[2] or position_1.y
+  local x2 = position_2[1] or position_2.x
+  local y2 = position_2[2] or position_2.y
+  return (((x2 - x1) * (x2 - x1)) + ((y2 - y1) * (y2 - y1))) ^ 0.5
 end
 
 local in_range = function(entity_1, entity_2, extra)
@@ -359,11 +296,20 @@ local is_cheat_mode = function(entity)
   return entity.type == "character" and entity.player and entity.player.cheat_mode
 end
 
-local transfer_stack = function(destination, source_entity, stack)
-  --print("Want: "..stack.count)
-  --print("Have: "..source_entity.get_item_count(stack.name))
+local can_player_spawn_drones = function(player)
+  if player.vehicle then return end
 
-  if is_cheat_mode(source_entity) then
+  if not player.is_shortcut_toggled("construction-drone-toggle") then
+    return
+  end
+  
+  local count = player.get_item_count(names.units.construction_drone) - (data.request_count[player.index] or 0)
+  return count > 0
+end
+
+local transfer_stack = function(destination, source_entity, stack)
+
+  if source_entity.is_player() and source_entity.cheat_mode then
     destination.insert(stack)
     return stack.count
   end
@@ -582,17 +528,16 @@ local transfer_item = function(source, destination, name)
   end
 end
 
-local make_path_request = function(drone_data, character, target)
-
+local make_path_request = function(drone_data, player, target)
   local prototype = get_prototype(names.units.construction_drone)
 
-  local path_id = character.surface.request_path
+  local path_id = player.surface.request_path
   {
     bounding_box = prototype.collision_box,
     collision_mask = prototype.collision_mask_with_flags,
-    start = character.position,
+    start = player.position,
     goal = target.position,
-    force = character.force,
+    force = player.force,
     radius = target.get_radius() + 4,
     pathfind_flags = {},
     can_open_gates = true,
@@ -601,8 +546,8 @@ local make_path_request = function(drone_data, character, target)
 
   data.path_requests[path_id] = drone_data
 
-  local unit_number = character.unit_number
-  data.request_count[unit_number] = (data.request_count[unit_number] or 0) + 1
+  local index = player.index
+  data.request_count[index] = (data.request_count[index] or 0) + 1
 
 end
 
@@ -616,61 +561,6 @@ remote.add_interface("construction_drone",
   end
 })
 
-local check_priority_list = function(list, other_list, check_function, count)
-  while count > 0 do
-    local index, entry = next(list)
-    if index == nil then break end
-    other_list[index] = entry
-    list[index] = nil
-    if check_function(entry) then
-      other_list[index] = nil
-    end
-    count = count - 1
-  end
-  return count
-end
-
-local check_list = function(list, index, check_function)
-
-  if not index then
-    index = next(list)
-  end
-
-  if not index then
-    return true
-  end
-
-  local entry = list[index]
-  if not entry then 
-    return true
-  end
-
-  if check_function(entry) then
-    if list[index] then
-      --Remove him from the list, increment the index ourselves.
-      next_index = next(list, index)
-      list[index] = nil
-      return next_index
-    end
-  end
-
-  if not list[index] then return end
-  
-  --Need to increment the index
-  return next(list, index) or true
-  
-end
-
-local remove_from_list = function(list, index, global_index)
-  
-  if global_index == index then
-    global_index = next(list, index)
-  end
-
-  list[index] = nil
-  return global_index
-end
-
 local drone_stack_capacity
 local get_drone_stack_capacity = function(force)
   if drone_stack_capacity then return drone_stack_capacity end
@@ -678,16 +568,11 @@ local get_drone_stack_capacity = function(force)
   return drone_stack_capacity
 end
 
-local get_character_point = function(prototype, entity)
+local get_build_item = function(prototype, player)
   local items = prototype.items_to_place_this
-
-  local characters = get_characters_in_distance(entity)
-
-  for k, character in pairs (characters) do
-    for k, item in pairs(items) do
-      if character.get_item_count(item.name) >= item.count or is_cheat_mode(character) then
-        return character, item
-      end
+  for k, item in pairs(items) do
+    if player.get_item_count(item.name) >= item.count or player.cheat_mode then
+      return item
     end
   end
 end
@@ -705,43 +590,31 @@ local update_drone_sticker
 
 local process_drone_command
 
-local make_character_drone = function(character)
-  local position = character.surface.find_non_colliding_position(names.units.construction_drone, character.position, 5, 0.5, false)
+local make_player_drone = function(player)
+  local position = player.surface.find_non_colliding_position(names.units.construction_drone, player.position, 5, 0.5, false)
   if not position then return end
 
-  local removed = character.remove_item({name = names.units.construction_drone, count = 1})
+  local removed = player.remove_item({name = names.units.construction_drone, count = 1})
   if removed == 0 then return end
 
-  local drone = character.surface.create_entity{name = names.units.construction_drone, position = position, force = character.force}
+  local drone = player.surface.create_entity{name = names.units.construction_drone, position = position, force = player.force}
 
   return drone
 end
 
-local process_return_to_character_command
+local process_return_to_player_command
 
 local set_drone_order = function(drone, drone_data)
   drone.ai_settings.path_resolution_modifier = 0
   drone.ai_settings.do_separation = true
   data.drone_commands[drone.unit_number] = drone_data
   drone_data.entity = drone
-  local target = drone_data.target
-  if target and target.valid and target.unit_number then
-    local index = target.unit_number
-    data.targets[index] = data.targets[index] or {}
-    data.targets[index][drone.unit_number] = drone_data
-  end
   return process_drone_command(drone_data)
 end
 
-local find_a_character = function(drone_data)
+local find_a_player = function(drone_data)
   local entity = drone_data.entity
   if not (entity and entity.valid) then return end
-  if drone_data.character and drone_data.character.valid and drone_data.character.surface == entity.surface then return true end
-  local characters = get_characters_for_entity(entity)
-  if not next(characters) then
-    return
-  end
-  drone_data.character = entity.surface.get_closest(entity.position, characters)
   return true
 end
 
@@ -752,8 +625,8 @@ local set_drone_idle = function(drone)
 
 
   if drone_data then
-    if find_a_character(drone_data) then
-      process_return_to_character_command(drone_data)
+    if find_a_player(drone_data) then
+      process_return_to_player_command(drone_data)
       return
     else
       return drone_wait(drone_data, random(200, 400))
@@ -765,35 +638,37 @@ local set_drone_idle = function(drone)
 end
 
 
-local check_ghost = function(entity)
-  if not (entity and entity.valid) then return true end
-  --game.connected_players[1].zoom_to_world(entity.position, 0.5)
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = data.ghost_check_index or "nil"}
+local check_ghost = function(entity, player)
+  if not (entity and entity.valid) then return end
+  
+  if data.already_targeted[entity.unit_number] then return end
+
   local force = entity.force
   local surface = entity.surface
   local position = entity.position
 
-  local prototype = get_prototype(entity.ghost_name)
-  local character, item = get_character_point(prototype, entity)
+  local item = get_build_item(entity.ghost_prototype, player)
 
 --print("Checking ghost "..entity.ghost_name..random())
 
-  if not character then
-    --game.print("No character")
+  if not item then
     return
   end
 
-
   local count = 0
-  local extra_targets = {} --{[entity.unit_number] = entity}
-  local extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, position = position, radius = 5}
+  local extra_targets = {}
+  local extra
+  if entity.name == "tile-ghost" then
+    extra = surface.find_entities_filtered{type = tile_ghost_type, position = position, radius = 3}
+  else
+    extra = surface.find_entities_filtered{ghost_name = entity.ghost_name, position = position, radius = 5}
+  end
   for k, ghost in pairs (extra) do
     if count >= 8 then break end
     local unit_number = ghost.unit_number
-    local should_check = data.ghosts_to_be_checked[unit_number] or data.ghosts_to_be_checked_again[unit_number]
+    local should_check = not data.already_targeted[unit_number]
     if should_check then
-      data.ghosts_to_be_checked[unit_number] = nil
-      data.ghost_check_index = remove_from_list(data.ghosts_to_be_checked_again, unit_number, data.ghost_check_index)
+      data.already_targeted[unit_number] = true
       extra_targets[unit_number] = ghost
       count = count + 1
     end
@@ -801,12 +676,12 @@ local check_ghost = function(entity)
 
   item.count = count
 
-  local target = surface.get_closest(character.position, extra_targets)
+  local target = surface.get_closest(player.position, extra_targets)
   extra_targets[target.unit_number] = nil
 
   local drone_data =
   {
-    character = character,
+    player = player,
     order = drone_orders.construct,
     pickup = {stack = item},
     target = target,
@@ -814,7 +689,7 @@ local check_ghost = function(entity)
     extra_targets = extra_targets
   }
 
-  make_path_request(drone_data, character, target)
+  make_path_request(drone_data, player, target)
 end
 
 local on_built_entity = function(event)
@@ -847,67 +722,51 @@ local on_built_entity = function(event)
 
 end
 
-local check_ghost_lists = function()
+local check_upgrade = function(entity, player)
 
-  check_priority_list(data.ghosts_to_be_checked, data.ghosts_to_be_checked_again, check_ghost, priority_checks_per_tick)
-
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.ghosts_to_be_checked_again, data.ghost_check_index, check_ghost)
-    if result == true then
-      data.ghost_check_index = nil
-      break
-    elseif result ~= nil then
-      data.ghost_check_index = result
-    end
-  end
-
-end
-
-local check_upgrade = function(upgrade_data)
-  local entity = upgrade_data.entity
   if not (entity and entity.valid) then
-    --game.print("upgrade not valid")
-    return true
+    return
   end
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+
   if not entity.to_be_upgraded() then
-
-    --game.print("upgrade not to be upgraded?")
-    return true
+    return
   end
 
-  local upgrade_prototype = upgrade_data.upgrade_prototype
+  local index = unique_index(entity)
+  if data.already_targeted[index] then
+    return
+  end
+
+  local upgrade_prototype = entity.get_upgrade_target()
   if not upgrade_prototype then
-    --game.print("Maybe some migration?")
-    return true
+    return
   end
 
   local surface = entity.surface
   local force = entity.force
-  local character, item = get_character_point(upgrade_prototype, entity)
-  if not character then return end
+  local item = get_build_item(upgrade_prototype, player)
+  if not item then return end
 
   local count = 0
 
   local extra_targets = {}
-  for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8}) do
+  for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8, to_be_upgraded = true}) do
     if count >= 6 then break end
     local nearby_index = nearby.unit_number
-    local should_check = data.upgrade_to_be_checked[nearby_index] or data.upgrade_to_be_checked_again[nearby_index]
+    local should_check = not data.already_targeted[nearby_index]
     if should_check then
+      data.already_targeted[nearby_index] = true
       extra_targets[nearby_index] = nearby
-      data.upgrade_to_be_checked[nearby_index] = nil
-      data.upgrade_check_index = remove_from_list(data.upgrade_to_be_checked_again, nearby_index, data.upgrade_check_index)
       count = count + 1
     end
   end
 
-  local target = surface.get_closest(character.position, extra_targets)
+  local target = surface.get_closest(player.position, extra_targets)
   extra_targets[target.unit_number] = nil
 
   local drone_data =
   {
-    character = character,
+    player = player,
     order = drone_orders.upgrade,
     pickup = {stack = {name = item.name, count = count}},
     target = target,
@@ -916,148 +775,88 @@ local check_upgrade = function(upgrade_data)
     item_used_to_place = item.name
   }
 
-  make_path_request(drone_data, character, target)
+  make_path_request(drone_data, player, target)
+  data.already_targeted[index] = true
 end
 
-local check_upgrade_lists = function()
-  --game.print(serpent.line(data.upgrade_to_be_checked_again))
-  check_priority_list(data.upgrade_to_be_checked, data.upgrade_to_be_checked_again, check_upgrade, priority_checks_per_tick)
-  
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.upgrade_to_be_checked_again, data.upgrade_check_index, check_upgrade)
-    if result == true then
-      data.upgrade_check_index = nil
-      break
-    elseif result ~= nil then
-      data.upgrade_check_index = result
-    end
-  end
-
-end
-
-local check_proxy = function(entity)
+local check_proxy = function(entity, player)
   if not (entity and entity.valid) then
-  --print("Proxy not valid")
-    return true
+    return 
   end
+
   local target = entity.proxy_target
   if not (target and target.valid) then
-  --print("Proxy target not valid")
-    return true
+    return
   end
 
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+  if data.already_targeted[unique_index(entity)] then
+    return
+  end
 
   local items = entity.item_requests
-  local force = entity.force
-  local surface = entity.surface
 
-  local characters = get_characters_in_distance(entity)
-  local needed = 0
-  local sent = 0
-  local position = entity.position
+  local position = entity.position  
   for name, count in pairs (items) do
-    needed = needed + 1
-    local selected_character
-    for k, character in pairs (characters) do
-      if character.get_item_count(name) > 0 or is_cheat_mode(character) then
-        selected_character = character
-        break
-      end
-    end
-    if selected_character then
+    if player.get_item_count(name) > 0 or player.cheat_mode then
       local drone_data =
       {
-        character = selected_character,
+        player = player,
         order = drone_orders.request_proxy,
         pickup = {stack = {name = name, count = count}},
         target = entity
       }
-      make_path_request(drone_data, selected_character, entity)
-      sent = sent + 1
-    end
-  end
-  return needed == sent
-end
-
-local check_proxies_lists = function()
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.proxies_to_be_checked, data.proxy_check_index, check_proxy)
-    if result == true then
-      data.proxy_check_index = nil
-      break
-    elseif result ~= nil then
-      data.proxy_check_index = result
+      make_path_request(drone_data, player, entity)
     end
   end
 
+  data.already_targeted[unique_index(entity)] = true
 end
 
-local check_cliff_deconstruction = function(deconstruct)
-  --game.print("HI")
-  local entity = deconstruct.entity
-  local force = deconstruct.force
+local check_cliff_deconstruction = function(entity, player)
   local surface = entity.surface
   local position = entity.position
 
   local cliff_destroying_item = entity.prototype.cliff_explosive_prototype
   if not cliff_destroying_item then
-    --game.print("Welp, idk...")
-    return true
-  end
-
-  local characters = get_characters_in_distance(entity, force)
-
-  for k, character in pairs (characters) do
-    if character.get_item_count(cliff_destroying_item) == 0 or (not is_cheat_mode(character)) then
-      --game.print("no item for this guy")
-      characters[k] = nil
-    end
-  end
-
-  if not next(characters) then
-    --game.print("no characters")
     return
   end
 
-  local character = surface.get_closest(position, characters)
+  if player.get_item_count(cliff_destroying_item) == 0 and (not player.cheat_mode) then
+    return
+  end
 
   local drone_data =
   {
-    character = character,
+    player = player,
     order = drone_orders.cliff_deconstruct,
     target = entity,
     pickup = {stack = {name = cliff_destroying_item, count = 1}}
   }
-  make_path_request(drone_data, character, entity)
+  make_path_request(drone_data, player, entity)
 
-  return true
+  data.already_targeted[unique_index(entity)] = true
 
 end
 
-local check_deconstruction = function(deconstruct)
-  local entity = deconstruct.entity
-  local force = deconstruct.force
+local check_deconstruction = function(entity, player)
   if not (entity and entity.valid) then return true end
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
-  if not (force and force.valid) then return true end
-
   if not entity.to_be_deconstructed() then return true end
 
+  local index = unique_index(entity)
+  if data.already_targeted[index] then return end
+  
+  local force = player.force
+
+  if not (entity.force == force or entity.force.name == "neutral" or entity.force.is_friend(force)) then
+    return
+  end
+
+
   if entity.type == cliff_type then
-    return check_cliff_deconstruction(deconstruct)
+    return check_cliff_deconstruction(entity, player)
   end
 
   local surface = entity.surface
-
-  --[[local mineable_properties = entity.prototype.mineable_properties
-  if not mineable_properties.minable then
-  --print("Why are you marked for deconstruction if I cant mine you?")
-    return
-  end]]
-
-  local character = get_character_for_job(entity, force)
-  if not character then return end
 
   local index = unique_index(entity)
   local sent = data.sent_deconstruction[index] or 0
@@ -1075,123 +874,55 @@ local check_deconstruction = function(deconstruct)
 
   if needed == 1 then
 
-    --local drone = make_character_drone(character)
-    --if not drone then return end
     local extra_targets = {}
     local count = 10
 
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8, to_be_deconstructed = true}) do
       if count <= 0 then break end
-      local nearby_index = unique_index(nearby)
-      local should_check = data.deconstructs_to_be_checked[nearby_index] or data.deconstructs_to_be_checked_again[nearby_index]
+      local nearby_index = unique_index(nearby)      
+      local should_check = not data.already_targeted[nearby_index]
       if should_check then
+        data.already_targeted[nearby_index] = true
         extra_targets[nearby_index] = nearby
-        data.deconstructs_to_be_checked[nearby_index] = nil
-        data.deconstruction_check_index = remove_from_list(data.deconstructs_to_be_checked_again, nearby_index, data.deconstruction_check_index)
         count = count - 1
       end
     end
 
-    local target = surface.get_closest(character.position, extra_targets)
+    local target = surface.get_closest(player.position, extra_targets)
     if not target then return end
 
     extra_targets[unique_index(target)] = nil
 
     local drone_data =
     {
-      character = character,
+      player = player,
       order = drone_orders.deconstruct,
       target = target,
       extra_targets = extra_targets
     }
 
-    make_path_request(drone_data, character, target)
+    make_path_request(drone_data, player, target)
     return
 
   end
 
-  for k = 1, math.min(needed, 10, character.get_item_count(names.units.construction_drone)) do
+  for k = 1, math.min(needed, 10, player.get_item_count(names.units.construction_drone)) do
     if not (entity and entity.valid) then break end
     local drone_data =
     {
-      character = character,
+      player = player,
       order = drone_orders.deconstruct,
       target = entity
     }
-    make_path_request(drone_data, character, entity)
+    make_path_request(drone_data, player, entity)
     sent = sent + 1
   end
 
   data.sent_deconstruction[index] = sent
-  return sent >= needed
 
-end
-
-local check_deconstruction_lists = function()
-
-  check_priority_list(data.deconstructs_to_be_checked, data.deconstructs_to_be_checked_again, check_deconstruction, priority_checks_per_tick)
-
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.deconstructs_to_be_checked_again, data.deconstruction_check_index, check_deconstruction)
-    if result == true then
-      data.deconstruction_check_index = nil
-      break
-    elseif result ~= nil then
-      data.deconstruction_check_index = result
-    end
+  if sent >= needed then
+    data.already_targeted[index] = true
   end
-
-end
-
-local check_tile_deconstruction = function(entity)
-
-  if not (entity and entity.valid) then return true end
-
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
-  --game.connected_players[1].zoom_to_world(entity.position, 0.5)
-
-  local character = get_character_for_job(entity)
-  if not character then return end
-
-  local surface = entity.surface
-
-  local extra_targets = {}
-  for k, nearby in pairs (surface.find_entities_filtered{type = tile_deconstruction_proxy, position = entity.position, radius = 3}) do
-    local nearby_index = unique_index(nearby)
-    local should_check = data.deconstruction_proxies_to_be_checked[nearby_index]
-    if should_check then
-      extra_targets[nearby_index] = nearby
-      data.deconstructs_to_be_checked[nearby_index] = nil
-      data.deconstruction_tile_check_index = remove_from_list(data.deconstruction_proxies_to_be_checked, nearby_index, data.deconstruction_tile_check_index)
-    end
-  end
-  local target = surface.get_closest(character.position, extra_targets)
-  extra_targets[unique_index(target)] = nil
-
-  local drone_data =
-  {
-    character = character,
-    order = drone_orders.tile_deconstruct,
-    target = target,
-    extra_targets = extra_targets
-  }
-
-  make_path_request(drone_data, character, target)
-
-end
-
-local check_tile_deconstruction_lists = function()
-  
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.deconstruction_proxies_to_be_checked, data.deconstruction_tile_check_index, check_tile_deconstruction)
-    if result == true then
-      data.deconstruction_tile_check_index = nil
-      break
-    elseif result ~= nil then
-      data.deconstruction_tile_check_index = result
-    end
-  end
-
 end
 
 local repair_items
@@ -1207,157 +938,240 @@ local get_repair_items = function()
   return repair_items
 end
 
-local check_repair = function(entity)
+local check_repair = function(entity, player)
+
   if not (entity and entity.valid) then return true end
-  --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
---print("Checking repair of an entity: "..entity.name)
-  if entity.has_flag("not-repairable") then return true end
+
+  if entity.has_flag("not-repairable") then return end
 
   local health = entity.get_health_ratio()
   if not (health and health < 1) then return true end
 
-  local surface = entity.surface
+  local index = unique_index(entity)
+  if data.already_targeted[index] then
+    return
+  end
 
-  local characters = get_characters_in_distance(entity)
-
-  local selected_character, repair_item
-
+  local repair_item
   local repair_items = get_repair_items()
-  for k, character in pairs (characters) do
-    for name, item in pairs (repair_items) do
-      if character.get_item_count(name) > 0 or is_cheat_mode(character) then
-        selected_character = character
-        repair_item = item
-        break
-      end
+  for name, item in pairs (repair_items) do
+    if player.get_item_count(name) > 0 or player.cheat_mode then
+      repair_item = item
+      break
     end
   end
 
-  if not selected_character then
+  if not repair_item then
     return
   end
 
   local drone_data =
   {
-    character = selected_character,
+    player = player,
     order = drone_orders.repair,
     pickup = {stack = {name = repair_item.name, count = 1}},
     target = entity,
   }
-  make_path_request(drone_data, selected_character, entity)
-  return true
+
+  make_path_request(drone_data, player, entity)
+  
+  data.already_targeted[index] = true
+  
 end
 
-local check_repair_lists = function()
-
-  check_priority_list(data.repair_to_be_checked, data.repair_to_be_checked_again, check_repair, priority_checks_per_tick)
-
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.repair_to_be_checked_again, data.repair_check_index, check_repair)
-    if result == true then
-      data.repair_check_index = nil
-      break
-    elseif result ~= nil then
-      data.repair_check_index = result
-    end
+local check_job = function(player, job)
+  
+  if job.type == drone_orders.construct then
+    check_ghost(job.entity, player)
+    return
   end
-
-end
-
-local check_tile = function(entity)
-  if not (entity and entity.valid) then
-    return true
+  
+  if job.type == drone_orders.deconstruct then
+    check_deconstruction(job.entity, player)
+    return
   end
-
-  local force = entity.force
-  local surface = entity.surface
-  local ghost_name = entity.ghost_name
-
-  local tile_prototype = game.tile_prototypes[ghost_name]
-  local character, item = get_character_point(tile_prototype, entity)
-
-  if not character then
-  --print("no eligible character with item?")
+  
+  if job.type == drone_orders.upgrade then
+    check_upgrade(job.entity, player)
     return
   end
 
-  --local drone = make_character_drone(character)
-  --if not drone then return end
-
-  local count = 0
-  local extra_targets = {}
-  local extra = surface.find_entities_filtered{type = tile_ghost_type, position = entity.position, radius = 3}
-  for k, ghost in pairs (extra) do
-    local unit_number = ghost.unit_number
-    local should_check = data.tiles_to_be_checked[unit_number] and ghost.ghost_name == ghost_name
-    if should_check then
-      data.tile_check_index = remove_from_list(data.tiles_to_be_checked, unit_number, data.tile_check_index)
-      extra_targets[unit_number] = ghost
-      count = count + 1
-    end
+  if job.type == drone_orders.request_proxy then
+    check_proxy(job.entity, player)
+    return
   end
 
-  local target = surface.get_closest(character.position, extra_targets)
-  extra_targets[target.unit_number] = nil
-
-  local drone_data =
-  {
-    character = character,
-    order = drone_orders.tile_construct,
-    pickup = {stack = {name = item.name, count = count}},
-    target = target,
-    item_used_to_place = item.name,
-    extra_targets = extra_targets
-  }
-
-  make_path_request(drone_data, character, target)
+  if job.type == drone_orders.repair then
+    check_repair(job.entity, player)
+    return
+  end
 
 end
 
-local check_tile_lists = function()
+local scan_for_nearby_jobs = function(player, area)
+  --game.print(serpent.line(area))
+  player.surface.create_entity{name = "flying-text", position = {area[1][1], area[1][2]}, text = "lt"}
+  player.surface.create_entity{name = "flying-text", position = {area[2][1], area[2][2]}, text = "rb"}
+  local job_queue = data.job_queue
 
-  for k = 1, max_checks_per_tick do
-    local result = check_list(data.tiles_to_be_checked, data.tile_check_index, check_tile)
-    if result == true then
-      data.tile_check_index = nil
-      break
-    elseif result ~= nil then
-      data.tile_check_index = result
+  local player_index = player.index
+
+  if not player.connected then
+    job_queue[player_index] = nil
+    return
+  end
+
+  if not player.is_shortcut_toggled("construction-drone-toggle") then
+    job_queue[player_index] = nil
+    return
+  end
+  
+  local player_queue = job_queue[player.index]
+  if not player_queue then
+    player_queue = {}
+    job_queue[player_index] = player_queue
+  end
+
+  local already_targeted = data.already_targeted
+
+  local entities = player.surface.find_entities_filtered{area = area}
+
+  local unique_index = unique_index
+  local check_entity = function(entity)
+    local index = unique_index(entity)
+    if already_targeted[index] then return end
+    local name = entity.name
+    --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
+    if name == "entity-ghost" or name == "tile-ghost" then
+      player_queue[index] = 
+      {
+        type = drone_orders.construct,
+        entity = entity
+      }
+      return true
+    end
+
+    if name == "item-request-proxy" then
+      player_queue[index] =
+      {
+        type = drone_orders.request_proxy,
+        entity = entity
+      }
+      return true
+    end
+
+    if entity.to_be_deconstructed() then
+      player_queue[index] = 
+      {
+        type = drone_orders.deconstruct,
+        entity = entity
+      }
+      return true
+    end
+
+    if (entity.get_health_ratio() or 1) < 1 then
+      player_queue[index] =     
+      {
+        type = drone_orders.repair,
+        entity = entity
+      }
+      return true
+    end
+
+    if entity.to_be_upgraded() then
+      player_queue[index] =     
+      {
+        type = drone_orders.upgrade,
+        entity = entity
+      }
+      return true
+    end
+
+  end
+
+  for k, entity in pairs (entities) do
+    check_entity(entity)
+  end
+
+end
+
+local check_player_jobs = function(player)
+
+  if not can_player_spawn_drones(player) then return end
+  
+  local queue = data.job_queue[player.index]
+  if not queue then return end
+
+  local index, job = next(queue)
+  if not index then
+    return
+  end
+
+  check_job(player, job)
+  queue[index] = nil
+end
+
+
+
+local div = 8
+local r = 64 / div
+local search_offsets = {}
+
+for y = -div, div - 1 do
+  for x = -div, div - 1 do
+    local area = {{x * r, y * r}, {(x + 1) * r, (y + 1) * r}}
+    table.insert(search_offsets, area)
+  end
+end
+
+table.sort(search_offsets, function(a, b) return distance(a[1], {0,0}) < distance(b[1], {0,0}) end)
+
+local check_search_queue = function()
+  local index, search_data = next(data.search_queue)
+  if not index then return end
+  data.search_queue[index] = nil
+  local player_index = search_data.player_index
+  local player = game.get_player(player_index)
+  if not player then return end
+  local index = search_data.area_index
+  local area = search_offsets[index]
+  local position = player.position
+  local search_area = {{area[1][1] + position.x, area[1][2] + position.y}, {area[2][1] + position.x, area[2][2] + position.y}}
+  scan_for_nearby_jobs(player, search_area)
+end
+
+local insert = table.insert
+local schedule_new_searches = function()
+
+  local queue = data.search_queue
+  if next(queue) then return end
+
+  for k, player in pairs (game.connected_players) do
+    local index = player.index
+    if can_player_spawn_drones(player) and not next(data.job_queue[index] or {}) then
+      for i, v in pairs(search_offsets) do
+        insert(queue, 
+        {
+          player_index = index,
+          area_index = i
+        })
+      end
     end
   end
 
 end
 
 local on_tick = function(event)
-  --local profiler = game.create_profiler()
 
-  check_deconstruction_lists()
-  --game.print({"", game.tick, " deconstruction checks ", profiler})
-  --profiler.reset()
+  for k, player in pairs (game.connected_players) do
+    check_player_jobs(player)
+  end
 
-  check_ghost_lists()
-  --game.print({"", game.tick, " ghost checks ", profiler})
-  --profiler.reset()
+  check_search_queue()
 
-  check_upgrade_lists()
-  --game.print({"", game.tick, " upgrade checks ", profiler})
-  --profiler.reset()
-
-  check_repair_lists()
-  --game.print({"", game.tick, " repair checks ", profiler})
-  --profiler.reset()
-
-  check_proxies_lists()
-  --game.print({"", game.tick, " proxy checks ", profiler})
-  --profiler.reset()
-
-  check_tile_deconstruction_lists()
-  --game.print({"", game.tick, " tile decon checks ", profiler})
-  --profiler.reset()
-
-  check_tile_lists()
-  --game.print({"", game.tick, " tile ghost checks ", profiler})
-  --profiler.reset()
+  if game.tick % 60 == 0 then
+    schedule_new_searches()
+  end
 
 end
 
@@ -1371,35 +1185,15 @@ local clear_extra_targets = function(drone_data)
   local targets = validate(drone_data.extra_targets)
   local order = drone_data.order
 
-  if order == drone_orders.upgrade then
-    for unit_number, entity in pairs (targets) do
-      data.upgrade_to_be_checked_again[unit_number] = {entity = entity, upgrade_prototype = drone_data.upgrade_prototype}
-    end
-    return
-  end
-
-  if order == drone_orders.construct then
-    for unit_number, entity in pairs (targets) do
-      data.ghosts_to_be_checked[unit_number] = entity
-    end
-    return
-  end
-
-  if order == drone_orders.tile_construct then
-    for unit_number, entity in pairs (targets) do
-      data.tiles_to_be_checked[unit_number] = entity
-    end
-    return
+  for k, entity in pairs (targets) do
+    data.already_targeted[unique_index(entity)] = nil
   end
 
   if order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
     for index, entity in pairs (targets) do
       local index = unique_index(entity)
-      local force = drone_data.entity and drone_data.entity.force or drone_data.character and drone_data.character.force
-      data.deconstructs_to_be_checked[index] = {entity = entity, force = force}
       data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
     end
-    return
   end
 
 end
@@ -1422,36 +1216,15 @@ local clear_target = function(drone_data)
   if not (target and target.valid) then
     return
   end
-  local order = drone_data.order
-  local target_unit_number = target.unit_number
-  if target_unit_number then
-    if data.targets[target_unit_number] then
-      local unit_number = drone_data.entity and drone_data.entity.unit_number
-      if unit_number then
-        data.targets[target_unit_number][unit_number] = nil
-        if not next(data.targets[target_unit_number]) then
-          data.targets[target_unit_number] = nil
-        end
-      end
-    end
-  end
 
-  if order == drone_orders.request_proxy then
-    insert(data.proxies_to_be_checked, target)
-  elseif order == drone_orders.repair then
-    data.repair_to_be_checked[target_unit_number] = target
-  elseif order == drone_orders.upgrade then
-    data.upgrade_to_be_checked_again[target_unit_number] = {entity = target, upgrade_prototype = drone_data.upgrade_prototype}
-  elseif order == drone_orders.construct then
-    data.ghosts_to_be_checked_again[target_unit_number] = target
-  elseif order == drone_orders.tile_construct then
-    data.tiles_to_be_checked[target_unit_number] = target
-  elseif order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
-    local index = unique_index(target)
-    local force = (drone_data.entity and drone_data.entity.valid and drone_data.entity.force) or (drone_data.character and drone_data.character.valid and drone_data.character.force)
-    data.deconstructs_to_be_checked_again[index] = {entity = target, force = force}
+  local order = drone_data.order
+  local index = unique_index(target)
+
+  if order == drone_orders.deconstruct or order == drone_orders.cliff_deconstruct then
     data.sent_deconstruction[index] = (data.sent_deconstruction[index] or 1) - 1
   end
+
+  data.already_targeted[index] = nil
 
 end
 
@@ -1471,7 +1244,7 @@ local cancel_drone_order = function(drone_data, on_removed)
   drone_data.order = nil
   drone_data.target = nil
 
-  if not find_a_character(drone_data) then
+  if not find_a_player(drone_data) then
     return drone_wait(drone_data, random(30, 300))
   end
 
@@ -1488,22 +1261,6 @@ local cancel_drone_order = function(drone_data, on_removed)
     set_drone_idle(drone)
   end
 
-end
-
-local clear_target_data = function(unit_number)
-  if not unit_number then return end
-  data.targets[unit_number] = nil
-end
-
-local cancel_target_data = function(unit_number)
-  if not unit_number then return end
-  local drone_datas = data.targets[unit_number]
-  if drone_datas then
-    data.targets[unit_number] = nil
-    for k, drone_data in pairs (drone_datas) do
-      cancel_drone_order(drone_data)
-    end
-  end
 end
 
 local floor = math.floor
@@ -1526,6 +1283,31 @@ local move_to_order_target = function(drone_data, target, range)
     type = defines.command.go_to_location,
     destination_entity = target,
     radius = (target == drone_data.character and 1) or (get_radius(drone, range) + get_radius(target)),
+    distraction = defines.distraction.none,
+    pathfind_flags = drone_pathfind_flags
+  }
+
+end
+
+local move_to_player = function(drone_data, player, range)
+
+  local drone = drone_data.entity
+
+  if drone.surface ~= player.surface then
+    cancel_drone_order(drone_data)
+    return
+  end
+
+  if distance(drone.position, player.position) < 2 then
+    return true
+  end
+
+  drone.set_command
+  {
+    type = defines.command.go_to_location,
+    destination_entity = player.character or nil,
+    destination = (not player.character and player.position) or nil,
+    radius = 2,
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }
@@ -1624,13 +1406,13 @@ end
 local process_pickup_command = function(drone_data)
 --print("Procesing pickup command")
 
-  local chest = drone_data.character
-  if not (chest and chest.valid) then
+  local player = drone_data.player
+  if not (player and player.valid) then
   --print("Character for pickup was not valid")
     return cancel_drone_order(drone_data)
   end
 
-  if not move_to_order_target(drone_data, chest, ranges.interact) then
+  if not move_to_player(drone_data, player, ranges.interact) then
     return
   end
 
@@ -1640,7 +1422,7 @@ local process_pickup_command = function(drone_data)
   local stack = drone_data.pickup.stack
   local drone_inventory = get_drone_inventory(drone_data)
 
-  transfer_stack(drone_inventory, chest, stack)
+  transfer_stack(drone_inventory, player, stack)
 
   update_drone_sticker(drone_data)
 
@@ -1661,11 +1443,11 @@ local process_dropoff_command = function(drone_data)
   local drone = drone_data.entity
 --print("Procesing dropoff command. "..drone.unit_number)
 
-  if drone_data.character then
-    return process_return_to_character_command(drone_data)
+  if drone_data.player then
+    return process_return_to_player_command(drone_data)
   end
 
-  find_a_character(drone_data)
+  find_a_player(drone_data)
 
 end
 
@@ -1755,7 +1537,7 @@ local process_construct_command = function(drone_data)
   local drone = drone_data.entity
   local position = target.position
 
-  local unit_number = target.unit_number
+  local index = unique_index(target)
   local success, entity, proxy = target.revive(revive_param)
   if not success then
     if target.valid then
@@ -1769,16 +1551,11 @@ local process_construct_command = function(drone_data)
     end
     return
   end
+  data.already_targeted[index] = nil
 
 
   drone_inventory.remove{name = drone_data.item_used_to_place, count = 1}
   update_drone_sticker(drone_data)
-
-  clear_target_data(unit_number)
-
-  if proxy and proxy.valid then
-    insert(data.proxies_to_be_checked, proxy)
-  end
 
   drone_data.target = get_extra_target(drone_data)
 
@@ -1812,7 +1589,7 @@ local process_failed_command = function(drone_data)
 
   drone.ai_settings.path_resolution_modifier = 0  
   cancel_drone_order(drone_data, true)
-  process_return_to_character_command(drone_data, true)
+  process_return_to_player_command(drone_data, true)
 
 end
 
@@ -1858,13 +1635,23 @@ local process_deconstruct_command = function(drone_data)
     drone_data.beam = nil
   end
 
+  local tiles
+  if target.type == tile_deconstruction_proxy then
+    tiles =
+    {
+      {
+        name = target.surface.get_hidden_tile(target.position) or "grass-1",
+        position = target.position
+
+      }
+    }
+  end
+
   local mined = mine_entity(drone_inventory, target)
 
   if mined then
-    if unit_number then
-      clear_target_data(unit_number)
-    end
     data.sent_deconstruction[index] = nil
+    data.already_targeted[index] = nil
   else
     update_drone_sticker(drone_data)
     if drone_inventory.is_empty() then
@@ -1872,6 +1659,10 @@ local process_deconstruct_command = function(drone_data)
     end
     cancel_drone_order(drone_data)
     return
+  end
+
+  if tiles then
+    drone.surface.set_tiles(tiles, true, false, false, true)
   end
 
   local target = get_extra_target(drone_data)
@@ -1979,7 +1770,7 @@ local process_upgrade_command = function(drone_data)
   local prototype = drone_data.upgrade_prototype
   local original_name = target.name
   local entity_type = target.type
-  local unit_number = target.unit_number
+  local index = unique_index(target)
   local neighbour = entity_type == "underground-belt" and target.neighbours
   local type = entity_type == "underground-belt" and target.belt_to_ground_type or entity_type == "loader" and target.loader_type
   local position = target.position
@@ -1996,8 +1787,9 @@ local process_upgrade_command = function(drone_data)
     raise_built = true
   }
 
+  data.already_targeted[index] = nil
+
   get_drone_inventory(drone_data).remove({name = drone_data.item_used_to_place})
-  clear_target_data(unit_number)
 
   local drone_inventory = get_drone_inventory(drone_data)
   local products = get_prototype(original_name).mineable_properties.products
@@ -2008,7 +1800,7 @@ local process_upgrade_command = function(drone_data)
   if neighbour and neighbour.valid then
   --print("Upgrading neighbour")
     local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
-    local neighbour_unit_number = neighbour.unit_number
+    local neighbour_index = unique_index(neighbour)
     surface.create_entity
     {
       name = prototype.name,
@@ -2020,7 +1812,7 @@ local process_upgrade_command = function(drone_data)
       type = type or nil,
       raise_built = true
     }
-    clear_target_data(neighbour_unit_number)
+    data.already_targeted[neighbour_index] = nil
     take_product_stacks(drone_inventory, products)
   end
 
@@ -2149,8 +1941,6 @@ local process_construct_tile_command = function(drone_data)
   local current_prototype = tile.prototype
   local products = current_prototype.mineable_properties.products
   local target_tile_name = target.ghost_name
-
-  clear_target_data(target.unit_number)
 
   surface.set_tiles({{name = target_tile_name, position = position}}, true, false, false, true)
 
@@ -2299,10 +2089,11 @@ local process_deconstruct_cliff_command = function(drone_data)
   else
     drone_data.beam = nil
   end
-
+  local index = unique_index(target)
   get_drone_inventory(drone_data).remove{name = target.prototype.cliff_explosive_prototype, count = 1}
   target.surface.create_entity{name = "ground-explosion", position = util.center(target.bounding_box)}
   target.destroy()
+  data.already_targeted[index] = nil
 --print("Cliff destroyed, heading home bois. ")
   update_drone_sticker(drone_data)
 
@@ -2321,28 +2112,28 @@ local directions =
   [defines.direction.northwest] = {-1, -1},
 }
 
-process_return_to_character_command = function(drone_data, force)
+process_return_to_player_command = function(drone_data, force)
 
 --print("returning to dude")
 
-  local target = drone_data.character
-  if not (target and target.valid) then
+  local player = drone_data.player
+  if not (player and player.valid) then
     return cancel_drone_order(drone_data)
   end
 
-  if not (force or move_to_order_target(drone_data, target, ranges.return_to_character)) then
+  if not (force or move_to_player(drone_data, player, ranges.return_to_character)) then
     return
   end
 
   local inventory = get_drone_inventory(drone_data)
-  transfer_inventory(inventory, target)
+  transfer_inventory(inventory, player)
 
   if not inventory.is_empty() then
     drone_wait(drone_data, random(18, 24))
     return
   end
 
-  if target.insert({name = names.units.construction_drone, count = 1}) == 0 then
+  if player.insert({name = names.units.construction_drone, count = 1}) == 0 then
     drone_wait(drone_data, random(18, 24))
     return
   end
@@ -2364,19 +2155,14 @@ end
 
 
 process_drone_command = function(drone_data, result)
+
   local drone = drone_data.entity
   if not (drone and drone.valid) then
-    --I guess it can happen, that another mod will kill it first? Who cares, this never happened during testing!
-    log("Drone entity not valid when processing its own command!\n"..serpent.block(drone_data))
     return
   end
 
-  --local print = function(string)
-  --print(string.. " | "..drone.unit_number)
-  --end
---print("Processing drone command")
-  if drone_data.character and drone_data.character.valid then
-    drone.speed = drone_data.character.character_running_speed * 1.2
+  if drone_data.player and drone_data.player.valid then
+    drone.speed = drone_data.player.character_running_speed * 1.2
   else
     drone.speed = drone.prototype.speed * ( 1 + (math.random() - 0.5) / 4)
   end
@@ -2421,25 +2207,15 @@ process_drone_command = function(drone_data, result)
     return process_request_proxy_command(drone_data)
   end
 
-  if drone_data.order == drone_orders.tile_construct then
-  --print("Tile Construct")
-    return process_construct_tile_command(drone_data)
-  end
-
-  if drone_data.order == drone_orders.tile_deconstruct then
-  --print("Tile Deconstruct")
-    return process_deconstruct_tile_command(drone_data)
-  end
-
   if drone_data.order == drone_orders.cliff_deconstruct then
   --print("Cliff Deconstruct")
     return process_deconstruct_cliff_command(drone_data)
   end
 
-  find_a_character(drone_data)
+  find_a_player(drone_data)
 
-  if drone_data.character then
-    return process_return_to_character_command(drone_data)
+  if drone_data.player then
+    return process_return_to_player_command(drone_data)
   end
 
   --game.print("Nothin")
@@ -2483,72 +2259,11 @@ local on_entity_removed = function(event)
     return
   end
 
-  cancel_target_data(unit_number)
-
-  if entity.type == ghost_type then
-    data.ghosts_to_be_checked_again[unit_number] = nil
-    data.ghosts_to_be_checked[unit_number] = nil
-    return
-  end
-
-end
-
-local on_marked_for_deconstruction = function(event)
-
-  local force = event.force or (event.player_index and game.players[event.player_index].force)
-  if not force then return end
-  local entity = event.entity
-  if not (entity and entity.valid) then return end
-  local type = entity.type
-  if type == tile_deconstruction_proxy then
-    data.deconstruction_proxies_to_be_checked[unique_index(entity)] = entity
-  else
-    data.deconstructs_to_be_checked[unique_index(entity)] = {entity = entity, force = force}
-  end
-end
-
-local on_entity_damaged = function(event)
-  local entity = event.entity
-  local unit_number = entity.unit_number
-  --For now, why would you want to repair trees and things? If it doens't have a unit number, no repairs.
-  --Maybe I will change this in the future.
-  if not unit_number then return end
-  if data.targets[unit_number] then return end
-  if data.repair_to_be_checked[unit_number] then return end
-  data.repair_to_be_checked[unit_number] = entity
-end
-
-local on_marked_for_upgrade = function(event)
-  local entity = event.entity
-  if not (entity and entity.valid) then return end
-  local upgrade_data = {entity = entity, upgrade_prototype = event.target}
-  data.upgrade_to_be_checked[entity.unit_number] = upgrade_data
-end
-
-local resetup_ghosts = function()
-  data.ghosts_to_be_checked_again = {}
-  for k, surface in pairs (game.surfaces) do
-    for k, ghost in pairs (surface.find_entities_filtered{type = "entity-ghost"}) do
-      data.ghosts_to_be_checked_again[ghost.unit_number] = ghost
-    end
-  end
-end
-
-local setup_characters = function()
-  data.characters = {}
-  for k, surface in pairs (game.surfaces) do
-    for k, character in pairs (surface.find_entities_filtered{type = "character"}) do
-      add_character(character)
-    end
-  end
 end
 
 local on_player_created = function(event)
   local player = game.get_player(event.player_index)
-  if player.character then
-    add_character(player.character)
-    player.set_shortcut_toggled("construction-drone-toggle", true)
-  end
+  player.set_shortcut_toggled("construction-drone-toggle", true)
 end
 
 local on_entity_cloned = function(event)
@@ -2574,10 +2289,6 @@ local on_entity_cloned = function(event)
   if destination.to_be_deconstructed() then
     data.deconstructs_to_be_checked_again[unique_index(destination)] = {entity = destination, force = destination.force}
     data.sent_deconstruction[unique_index(destination)] = 0
-  end
-
-  if destination.type == tile_deconstruction_proxy then
-    data.deconstruction_proxies_to_be_checked[unique_index(destination)] = destination
   end
 
   if destination.to_be_upgraded() then
@@ -2607,123 +2318,52 @@ local prune_commands = function()
 end
 
 local on_script_path_request_finished = function(event)
-  --game.print("HI")
   local drone_data = data.path_requests[event.id]
   if not drone_data then return end
   data.path_requests[event.id] = nil
 
-  local character = drone_data.character
-  if not (character and character.valid) then
-    --game.print("no character")
+  local player = drone_data.player
+  if not (player and player.valid) then
     clear_target(drone_data)
     clear_extra_targets(drone_data)
     return
   end
 
-  local unit_number = character.unit_number
-  data.request_count[unit_number] = (data.request_count[unit_number] or 0) - 1
+  local index = player.index
+  data.request_count[index] = (data.request_count[index] or 0) - 1
 
   if not event.path then
-    --game.print("no path")
     clear_target(drone_data)
     clear_extra_targets(drone_data)
     return
   end
 
-
-  local drone = make_character_drone(character)
+  local drone = make_player_drone(player)
   if not drone then
-
-    --game.print("no drone")
     clear_target(drone_data)
     clear_extra_targets(drone_data)
     return
   end
+
 
   set_drone_order(drone, drone_data)
 
 end
 
-local set_damaged_event_filter = function()
-
-  if not data.non_repairable_entities then return end
-
-  local filters = {}
-  for name, bool in pairs (data.non_repairable_entities) do
-    local filter =
-    {
-      filter = "name",
-      name = name,
-      invert = true,
-      mode = "and"
-    }
-    table.insert(filters, filter)
-  end
-
-  if not next(filters) then return end
-
-  script.set_event_filter(defines.events.on_entity_damaged, filters)
-end
-
-local update_non_repairable_entities = function()
-  data.non_repairable_entities = {}
-  for name, entity in pairs (game.entity_prototypes) do
-    if entity.has_flag("not-repairable") then
-      data.non_repairable_entities[name] = true
-    end
-  end
-  set_damaged_event_filter()
-end
-
-local scan_for_nearby_jobs = function(entity, radius)
-
-  local ghosts = entity.surface.find_entities_filtered{name = "entity-ghost", position = entity.position, radius = radius, force = entity.force}
-
-  for k, ghost in pairs (ghosts) do
-    local unit_number = ghost.unit_number
-    if data.ghosts_to_be_checked_again[unit_number] then
-      data.ghosts_to_be_checked[unit_number] = ghost
-    end
-  end
-
-  local decons = entity.surface.find_entities_filtered{position = entity.position, radius = radius, to_be_deconstructed = true}
-
-  for k, decon in pairs (decons) do
-    if decon.to_be_deconstructed() then
-      local index = unique_index(decon)
-      if data.deconstructs_to_be_checked_again[index] then
-        data.deconstructs_to_be_checked[index] = {entity = decon, force = entity.force}
-      end
-    end
-  end
-
-end
 
 local on_lua_shortcut = function(event)
   if event.prototype_name ~= "construction-drone-toggle" then return end
   local player = game.get_player(event.player_index)
-  if player.character then
-    add_character(player.character)
-  end
 
   local enabled = player.is_shortcut_toggled("construction-drone-toggle")
   if enabled then
     player.set_shortcut_toggled("construction-drone-toggle", false)
+    data.job_queue[player.index] = nil
     return 
   end
-  
+
   player.set_shortcut_toggled("construction-drone-toggle", true)
 
-  --make the drones feel responsive by finding nearby things to work on.
-  scan_for_nearby_jobs(player.character, 50)
-
-end
-
-local refresh_player_event = function(event)
-  local player = game.get_player(event.player_index)
-  if player.character then
-    add_character(player.character)
-  end
 end
 
 local lib = {}
@@ -2732,9 +2372,9 @@ lib.events =
 {
   [defines.events.on_tick] = on_tick,
 
-  [defines.events.on_built_entity] = on_built_entity,
-  [defines.events.on_post_entity_died] = on_built_entity,
-  [defines.events.script_raised_built] = on_built_entity,
+  --[defines.events.on_built_entity] = on_built_entity,
+  --[defines.events.on_post_entity_died] = on_built_entity,
+  --[defines.events.script_raised_built] = on_built_entity,
 
   [defines.events.on_entity_died] = on_entity_removed,
   [defines.events.on_robot_mined_entity] = on_entity_removed,
@@ -2742,16 +2382,8 @@ lib.events =
   [defines.events.on_pre_ghost_deconstructed] = on_entity_removed,
 
   [defines.events.on_player_created] = on_player_created,
-  [defines.events.on_player_joined_game] = refresh_player_event,
-  [defines.events.on_player_toggled_map_editor] = refresh_player_event,
-  [defines.events.on_player_respawned] = refresh_player_event,
-  [defines.events.on_player_changed_surface] = refresh_player_event,
-  [defines.events.on_player_driving_changed_state] = refresh_player_event,
 
   [defines.events.on_ai_command_completed] = on_ai_command_completed,
-  [defines.events.on_marked_for_deconstruction] = on_marked_for_deconstruction,
-  [defines.events.on_entity_damaged] = on_entity_damaged,
-  [defines.events.on_marked_for_upgrade] = on_marked_for_upgrade,
   [defines.events.on_entity_cloned] = on_entity_cloned,
 
   [defines.events.on_script_path_request_finished] = on_script_path_request_finished,
@@ -2761,7 +2393,6 @@ lib.events =
 lib.on_load = function()
   data = global.construction_drone or data
   global.construction_drone = data
-  set_damaged_event_filter()
 end
 
 lib.on_init = function()
@@ -2769,12 +2400,6 @@ lib.on_init = function()
   game.map_settings.steering.moving.force_unit_fuzzy_goto_behavior = false
   game.map_settings.path_finder.use_path_cache = false
   global.construction_drone = global.construction_drone or data
-
-  resetup_ghosts()
-  setup_characters()
-
-  update_non_repairable_entities()
-
   
   for k, player in pairs (game.players) do
     player.set_shortcut_toggled("construction-drone-toggle", true)
@@ -2785,39 +2410,11 @@ end
 lib.on_configuration_changed = function()
   game.map_settings.path_finder.use_path_cache = false
 
-  if data.idle_drones then
-    for k, drones in pairs (data.idle_drones) do
-      for k, drone in pairs (drones) do
-        set_drone_idle(drone)
-      end
-    end
-  end
-
-  if not data.migrate_deconstructs then
-    data.migrate_deconstructs = true
-    local new_check = {}
-    for k, to_check in pairs (data.deconstructs_to_be_checked) do
-      if to_check.entity.valid then
-        new_check[unique_index(to_check.entity)] = to_check
-      end
-    end
-    for k, to_check in pairs (data.deconstructs_to_be_checked_again) do
-      if to_check.entity.valid then
-        new_check[unique_index(to_check.entity)] = to_check
-      end
-    end
-    data.deconstructs_to_be_checked = new_check
-    data.deconstructs_to_be_checked_again = {}
-  end
-
   data.path_requests = data.path_requests or {}
   data.request_count = data.request_count or {}
 
-  setup_characters()
   prune_commands()
   
-  update_non_repairable_entities()
-
   if not data.set_default_shortcut then
     data.set_default_shortcut = true
     for k, player in pairs (game.players) do
