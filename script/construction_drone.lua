@@ -838,28 +838,28 @@ local check_cliff_deconstruction = function(entity, player)
 end
 
 local check_deconstruction = function(entity, player)
-  if not (entity and entity.valid) then return true end
-  if not entity.to_be_deconstructed() then return true end
+  if not (entity and entity.valid) then return end
+  if not entity.to_be_deconstructed() then return end
 
   local index = unique_index(entity)
-  if data.already_targeted[index] then return end
+  if data.already_targeted[index] then
+    return
+  end
   
   local force = player.force
-
+  
   if not (entity.force == force or entity.force.name == "neutral" or entity.force.is_friend(force)) then
     return
   end
-
-
+  
   if entity.type == cliff_type then
     return check_cliff_deconstruction(entity, player)
   end
-
+  
   local surface = entity.surface
-
-  local index = unique_index(entity)
+  
   local sent = data.sent_deconstruction[index] or 0
-
+  
   local capacity = get_drone_stack_capacity(force)
   local total_contents = contents(entity)
   local stack_sum = 0
@@ -868,20 +868,21 @@ local check_deconstruction = function(entity, player)
     stack_sum = stack_sum + (count / items[name].stack_size)
   end
   local needed = math.ceil((stack_sum + 1) / capacity)
-  needed = needed - sent
-
-
-  if needed == 1 then
-
+  needed = needed - sent  
+  
+  if needed <= 1 then
+    
     local extra_targets = {}
     local count = 10
-
+    
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8, to_be_deconstructed = true}) do
       if count <= 0 then break end
       local nearby_index = unique_index(nearby)      
       local should_check = not data.already_targeted[nearby_index]
       if should_check then
+        --nearby.surface.create_entity{name = "tutorial-flying-text", position = nearby.position, text = "  B"}
         data.already_targeted[nearby_index] = true
+        data.sent_deconstruction[nearby_index] = (data.sent_deconstruction[nearby_index] or 0) + 1
         extra_targets[nearby_index] = nearby
         count = count - 1
       end
@@ -1007,10 +1008,25 @@ local check_job = function(player, job)
 
 end
 
+local ignored_types =
+{
+  "resource",
+  "corpse",
+  "beam",
+  "flying-text",
+  "explosion",
+  "smoke-with-trigger",
+  "stream",
+  "fire-flame",
+  "particle-source",
+  "projectile",
+  "sticker",
+  "speech-bubble"
+}
 local scan_for_nearby_jobs = function(player, area)
   --game.print(serpent.line(area))
-  player.surface.create_entity{name = "tutorial-flying-text", position = {area[1][1], area[1][2]}, text = "["}
-  player.surface.create_entity{name = "tutorial-flying-text", position = {area[2][1], area[2][2]}, text = "]"}
+  --player.surface.create_entity{name = "tutorial-flying-text", position = {area[1][1], area[1][2]}, text = "["}
+  --player.surface.create_entity{name = "tutorial-flying-text", position = {area[2][1], area[2][2]}, text = "]"}
   local job_queue = data.job_queue
 
   local player_index = player.index
@@ -1033,7 +1049,12 @@ local scan_for_nearby_jobs = function(player, area)
 
   local already_targeted = data.already_targeted
 
-  local entities = player.surface.find_entities_filtered{area = area}
+  local entities = player.surface.find_entities_filtered
+  {
+    area = area,
+    type = ignored_types,
+    invert = true
+  }
 
   local unique_index = unique_index
   local check_entity = function(entity)
@@ -1101,13 +1122,18 @@ local check_player_jobs = function(player)
   local queue = data.job_queue[player.index]
   if not queue then return end
 
-  local index, job = next(queue)
-  if not index then
-    return
+  local count = math.min(5, player.get_item_count(names.units.construction_drone) - (data.request_count[player.index] or 0))
+
+  for k = 1, count do
+    local index, job = next(queue)
+    if not index then
+      return
+    end
+
+    check_job(player, job)
+    queue[index] = nil
   end
 
-  check_job(player, job)
-  queue[index] = nil
 end
 
 
