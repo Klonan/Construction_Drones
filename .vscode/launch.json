@@ -7,7 +7,9 @@
     {
       "type": "factoriomod",
       "request": "launch",
-      "name": "Factorio Mod Debug"
+      "name": "Factorio Mod Debug",
+      "hookMode": "profile",
+      "factorioPath": "C:/factorio/bin/Releasex64vs2017/factorio-run.exe"
     }
   ]
 }
