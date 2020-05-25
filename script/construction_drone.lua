@@ -952,6 +952,11 @@ local check_repair = function(entity, player)
     return
   end
 
+  local force = entity.force
+  if not (force == player.force or player.force.get_friend(force)) then
+    return
+  end
+
   local repair_item
   local repair_items = get_repair_items()
   for name, item in pairs (repair_items) do
