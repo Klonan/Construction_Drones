@@ -2122,10 +2122,10 @@ process_drone_command = function(drone_data, result)
     return
   end
 
-  if drone_data.player and drone_data.player.valid then
+  if drone_data.player and drone_data.player.valid and drone_data.player.character then
     drone.speed = drone_data.player.character_running_speed * 1.2
   else
-    drone.speed = drone.prototype.speed * ( 1 + (math.random() - 0.5) / 4)
+    drone.speed = 1
   end
 
   if (result == defines.behavior_result.fail) then

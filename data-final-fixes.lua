@@ -1,2 +1,21 @@
 util = require "data/tf_util/tf_util"
 names = require("shared")
+
+local remove_from_list = function(list, value)
+  for k, v in pairs (list) do
+    if v == value then
+      table.remove(list, k)
+      return
+    end
+  end
+end
+
+for k, rail in pairs (data.raw["straight-rail"]) do
+  rail.collision_mask = rail.collision_mask or {"water-tile", "floor-layer", "item-layer"}
+  remove_from_list(rail.collision_mask, "item-layer")
+end
+
+for k, rail in pairs (data.raw["curved-rail"]) do
+  rail.collision_mask = rail.collision_mask or {"water-tile", "floor-layer", "item-layer"}
+  remove_from_list(rail.collision_mask, "item-layer")
+end
