@@ -775,7 +775,6 @@ local check_upgrade = function(entity, player)
   }
 
   make_path_request(drone_data, player, target)
-  data.already_targeted[index] = true
 end
 
 local check_proxy = function(entity, player)
@@ -1204,12 +1203,13 @@ local on_tick = function(event)
 
   if game.tick % search_refresh == 0 then
     schedule_new_searches()
+    game.print(table_size(data.already_targeted))
   end
 
 end
 
 local get_build_time = function(drone_data)
-  return random(10, 20)
+  return random(15, 25)
 end
 
 local clear_extra_targets = function(drone_data)
@@ -1603,7 +1603,7 @@ local process_construct_command = function(drone_data)
     target_position = position,
     position = position,
     force = drone.force,
-    duration = build_time,
+    duration = build_time - 5,
     source_offset = offset
   }
   return drone_wait(drone_data, build_time)
@@ -1660,7 +1660,7 @@ local process_deconstruct_command = function(drone_data)
       target_position = target.position,
       position = drone.position,
       force = drone.force,
-      duration = build_time,
+      duration = build_time - 5,
       source_offset = offset
     }
     return drone_wait(drone_data, build_time)
@@ -1681,10 +1681,10 @@ local process_deconstruct_command = function(drone_data)
   end
 
   local mined = mine_entity(drone_inventory, target)
+  data.already_targeted[index] = nil
 
   if mined then
     data.sent_deconstruction[index] = nil
-    data.already_targeted[index] = nil
   else
     update_drone_sticker(drone_data)
     if drone_inventory.is_empty() then
@@ -1868,7 +1868,7 @@ local process_upgrade_command = function(drone_data)
     target_position = position,
     position = drone.position,
     force = drone.force,
-    duration = build_time,
+    duration = build_time - 5,
     source_offset = offset
   }
   return drone_wait(drone_data, build_time)
@@ -1940,7 +1940,7 @@ local process_request_proxy_command = function(drone_data)
     target_position = position,
     position = drone.position,
     force = drone.force,
-    duration = build_time,
+    duration = build_time - 5,
     source_offset = offset
   }
 
@@ -2009,82 +2009,10 @@ local process_construct_tile_command = function(drone_data)
     target_position = position,
     position = drone.position,
     force = drone.force,
-    duration = build_time,
+    duration = build_time - 5,
     source_offset = offset
   }
   return drone_wait(drone_data, build_time)
-end
-
-local process_deconstruct_tile_command = function(drone_data)
---print("Processing deconstruct tile command")
-  local target = drone_data.target
-  if not (target and target.valid) then
-  --print("Target was not valid...")
-    return cancel_drone_order(drone_data)
-  end
-
-
-  if not move_to_order_target(drone_data, target, ranges.interact) then
-    return
-  end
-
-
-  local drone = drone_data.entity
-  local position = target.position
-  local surface = target.surface
-  if not drone_data.beam then
-    local build_time = get_build_time(drone_data)
-    local orientation, offset = get_beam_orientation(drone.position, position)
-    drone.orientation = orientation
-    surface.create_entity
-    {
-      name = beams.deconstruction,
-      source = drone,
-      target_position = position,
-      position = drone.position,
-      force = drone.force,
-      duration = build_time,
-      source_offset = offset
-    }
-    drone_data.beam = true
-    return drone_wait(drone_data, build_time)
-  else
-    drone_data.beam = nil
-  end
-
-  local tile = surface.get_tile(position.x, position.y)
-  local current_prototype = tile.prototype
-  local products = current_prototype.mineable_properties.products
-  local hidden = tile.hidden_tile or "out-of-map"
-  
-  surface.set_tiles({{name = hidden, position = position}}, true, false, false, true)
-  script.raise_event(defines.events.on_robot_mined_tile, event_data)
-  target.destroy()
-
-  if surface.get_tile(position).name == hidden then
-    --Succesful
-    local drone_inventory = get_drone_inventory(drone_data)
-    local insert = drone_inventory.insert
-    if products then
-      for k, product in pairs (products) do
-        local stack = stack_from_product(product)
-        if stack then
-          insert(stack)
-        end
-      end
-    end
-
-  end
-
-  local target = get_extra_target(drone_data)
-  if target then
-    drone_data.target = target
-  else
-    drone_data.dropoff = {}
-  end
-
-  update_drone_sticker(drone_data)
-  return process_drone_command(drone_data)
 end
 
 local process_deconstruct_cliff_command = function(drone_data)
@@ -2454,6 +2382,10 @@ lib.on_configuration_changed = function()
       player.set_shortcut_toggled("construction-drone-toggle", true)
     end
   end
+
+  data.search_queue = data.search_queue or {}
+  data.job_queue = data.job_queue or {}
+  data.already_targeted = data.already_targeted or {}
 
 end
 
