@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.0
+Date: 2020-05-26
+  Changes:
+    - Wrote completely new job finding logic. Should help performance and responsiveness.
+    - The mod will now raise 'script_raised_set_tiles' when setting tiles.
+---------------------------------------------------------------------------------------------------
 Version: 0.5.6
 Date: 2020-05-19
   Changes:

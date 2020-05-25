@@ -1195,15 +1195,14 @@ end
 
 local on_tick = function(event)
 
+  check_search_queue()
+
   for k, player in pairs (game.connected_players) do
     check_player_jobs(player)
   end
 
-  check_search_queue()
-
-  if game.tick % search_refresh == 0 then
+  if event.tick % search_refresh == 0 then
     schedule_new_searches()
-    game.print(table_size(data.already_targeted))
   end
 
 end
