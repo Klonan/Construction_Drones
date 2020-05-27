@@ -478,7 +478,7 @@ local mine_entity = function(inventory, target)
     return true
   end
   if target.has_items_inside() then
-    target.surface.create_entity{name = "flying-text", position = target.position, text = "Items inside?"}
+    --target.surface.create_entity{name = "flying-text", position = target.position, text = "Items inside?"}
   --print("Tried to take all the target items, but he still has some, ergo, we cant fit that many items.")
     return
   end
