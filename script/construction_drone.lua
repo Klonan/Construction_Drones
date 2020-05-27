@@ -626,7 +626,27 @@ end
 local find_a_player = function(drone_data)
   local entity = drone_data.entity
   if not (entity and entity.valid) then return end
-  return true
+
+  if drone_data.player and drone_data.player.valid and drone_data.player.surface == entity.surface   then
+    return true
+  end
+
+  local closest
+  local min_distance = math.huge
+  for k, player in pairs (game.connected_players) do
+    if player.surface == entity.surface then
+      local distance = distance(player.position, entity.position)
+      if distance < min_distance then
+        closest = player
+        min_distance = distance
+      end
+    end
+  end
+
+  if closest then
+    drone_data.player = closest
+    return true
+  end
 end
 
 local set_drone_idle = function(drone)
