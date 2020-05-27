@@ -301,7 +301,7 @@ local can_player_spawn_drones = function(player)
   if not player.is_shortcut_toggled("construction-drone-toggle") then
     return
   end
-  
+
   local count = player.get_item_count(names.units.construction_drone) - (data.request_count[player.index] or 0)
   return count > 0
 end
@@ -460,31 +460,43 @@ local destroy_param =
   raise_destroy = true
 }
 
+local crafting_types =
+{
+  ["furnace"] = true,
+  ["assembling-machine"] = true
+}
+
 local mine_entity = function(inventory, target)
+
+  if crafting_types[target.type] then
+    target.crafting_progress = 0
+  end
+
   take_all_content(inventory, target)
   if not (target and target.valid) then
     --Items on ground die when you remove the items...
     return true
   end
   if target.has_items_inside() then
+    target.surface.create_entity{name = "flying-text", position = target.position, text = "Items inside?"}
   --print("Tried to take all the target items, but he still has some, ergo, we cant fit that many items.")
     return
   end
-  
+
   --[[
-    
+
     if not inventory.is_empty() then
       --Decided they only carry 1 stack now...
       return
     end
     ]]
-    
+
     local prototype = target.prototype
     local position = target.position
     local surface = target.surface
-    
+
     local products = prototype.mineable_properties.products
-    
+
     if products then
       if products[1] and not inventory.can_insert(products[1]) then
         --We can't insert even 1 of the result products
@@ -639,7 +651,7 @@ end
 
 local check_ghost = function(entity, player)
   if not (entity and entity.valid) then return end
-  
+
   if data.already_targeted[entity.unit_number] then return end
 
   local force = entity.force
@@ -779,7 +791,7 @@ end
 
 local check_proxy = function(entity, player)
   if not (entity and entity.valid) then
-    return 
+    return
   end
 
   local target = entity.proxy_target
@@ -793,7 +805,7 @@ local check_proxy = function(entity, player)
 
   local items = entity.item_requests
 
-  local position = entity.position  
+  local position = entity.position
   for name, count in pairs (items) do
     if player.get_item_count(name) > 0 or player.cheat_mode then
       local drone_data =
@@ -844,21 +856,21 @@ local check_deconstruction = function(entity, player)
   if data.already_targeted[index] then
     return
   end
-  
+
   local force = player.force
-  
+
   if not (entity.force == force or entity.force.name == "neutral" or entity.force.is_friend(force)) then
     return
   end
-  
+
   if entity.type == cliff_type then
     return check_cliff_deconstruction(entity, player)
   end
-  
+
   local surface = entity.surface
-  
+
   local sent = data.sent_deconstruction[index] or 0
-  
+
   local capacity = get_drone_stack_capacity(force)
   local total_contents = contents(entity)
   local stack_sum = 0
@@ -867,16 +879,16 @@ local check_deconstruction = function(entity, player)
     stack_sum = stack_sum + (count / items[name].stack_size)
   end
   local needed = math.ceil((stack_sum + 1) / capacity)
-  needed = needed - sent  
-  
+  needed = needed - sent
+
   if needed <= 1 then
-    
+
     local extra_targets = {}
     local count = 10
-    
+
     for k, nearby in pairs (surface.find_entities_filtered{name = entity.name, position = entity.position, radius = 8, to_be_deconstructed = true}) do
       if count <= 0 then break end
-      local nearby_index = unique_index(nearby)      
+      local nearby_index = unique_index(nearby)
       local should_check = not data.already_targeted[nearby_index]
       if should_check then
         --nearby.surface.create_entity{name = "tutorial-flying-text", position = nearby.position, text = "  B"}
@@ -978,23 +990,23 @@ local check_repair = function(entity, player)
   }
 
   make_path_request(drone_data, player, entity)
-  
+
   data.already_targeted[index] = true
-  
+
 end
 
 local check_job = function(player, job)
-  
+
   if job.type == drone_orders.construct then
     check_ghost(job.entity, player)
     return
   end
-  
+
   if job.type == drone_orders.deconstruct then
     check_deconstruction(job.entity, player)
     return
   end
-  
+
   if job.type == drone_orders.upgrade then
     check_upgrade(job.entity, player)
     return
@@ -1044,7 +1056,7 @@ local scan_for_nearby_jobs = function(player, area)
     job_queue[player_index] = nil
     return
   end
-  
+
   local player_queue = job_queue[player.index]
   if not player_queue then
     player_queue = {}
@@ -1067,7 +1079,7 @@ local scan_for_nearby_jobs = function(player, area)
     local name = entity.name
     --entity.surface.create_entity{name = "flying-text", position = entity.position, text = "!"}
     if name == "entity-ghost" or name == "tile-ghost" then
-      player_queue[index] = 
+      player_queue[index] =
       {
         type = drone_orders.construct,
         entity = entity
@@ -1085,7 +1097,7 @@ local scan_for_nearby_jobs = function(player, area)
     end
 
     if entity.to_be_deconstructed() then
-      player_queue[index] = 
+      player_queue[index] =
       {
         type = drone_orders.deconstruct,
         entity = entity
@@ -1094,7 +1106,7 @@ local scan_for_nearby_jobs = function(player, area)
     end
 
     if (entity.get_health_ratio() or 1) < 1 then
-      player_queue[index] =     
+      player_queue[index] =
       {
         type = drone_orders.repair,
         entity = entity
@@ -1103,7 +1115,7 @@ local scan_for_nearby_jobs = function(player, area)
     end
 
     if entity.to_be_upgraded() then
-      player_queue[index] =     
+      player_queue[index] =
       {
         type = drone_orders.upgrade,
         entity = entity
@@ -1122,7 +1134,7 @@ end
 local check_player_jobs = function(player)
 
   if not can_player_spawn_drones(player) then return end
-  
+
   local queue = data.job_queue[player.index]
   if not queue then return end
 
@@ -1182,7 +1194,7 @@ local schedule_new_searches = function()
     local index = player.index
     if can_player_spawn_drones(player) and not next(data.job_queue[index] or {}) then
       for i, v in pairs(search_offsets) do
-        insert(queue, 
+        insert(queue,
         {
           player_index = index,
           area_index = i
@@ -1619,7 +1631,7 @@ local process_failed_command = function(drone_data)
     return drone_wait(drone_data, 107)
   end
 
-  drone.ai_settings.path_resolution_modifier = 0  
+  drone.ai_settings.path_resolution_modifier = 0
   cancel_drone_order(drone_data, true)
   process_return_to_player_command(drone_data, true)
 
@@ -2319,7 +2331,7 @@ local on_lua_shortcut = function(event)
   if enabled then
     player.set_shortcut_toggled("construction-drone-toggle", false)
     data.job_queue[player.index] = nil
-    return 
+    return
   end
 
   player.set_shortcut_toggled("construction-drone-toggle", true)
@@ -2360,7 +2372,7 @@ lib.on_init = function()
   game.map_settings.steering.moving.force_unit_fuzzy_goto_behavior = false
   game.map_settings.path_finder.use_path_cache = false
   global.construction_drone = global.construction_drone or data
-  
+
   for k, player in pairs (game.players) do
     player.set_shortcut_toggled("construction-drone-toggle", true)
   end
@@ -2374,7 +2386,7 @@ lib.on_configuration_changed = function()
   data.request_count = data.request_count or {}
 
   prune_commands()
-  
+
   if not data.set_default_shortcut then
     data.set_default_shortcut = true
     for k, player in pairs (game.players) do
