@@ -407,38 +407,6 @@ local contents = function(entity)
   return contents
 end
 
-local take_all_content = function(inventory, target)
-
-  if not (target and target.valid) then return end
-
-  local type = target.type
-
-  if type == "item-entity" then
-    local stack = target.stack
-    if stack and stack.valid_for_read and inventory.can_insert(stack) then
-      local remove_stack = {name = stack.name, count = inventory.insert(stack)}
-      target.remove_item(remove_stack)
-    end
-    return
-  end
-
-  if type == "inserter" then
-    local stack = target.held_stack
-    if stack and stack.valid_for_read and inventory.can_insert(stack) then
-      local remove_stack = {name = stack.name, count = inventory.insert(stack)}
-      target.remove_item(remove_stack)
-    end
-  end
-
-  for k, target_inventory in pairs (inventories(target)) do
-    transfer_inventory(target_inventory, inventory)
-  end
-
-  for k, transport_line in pairs (transport_lines(target)) do
-    transfer_transport_line(transport_line, inventory)
-  end
-end
-
 local take_product_stacks = function(inventory, products)
   local insert = inventory.insert
   local to_spill = {}
@@ -459,85 +427,6 @@ local destroy_param =
 {
   raise_destroy = true
 }
-
-local crafting_types =
-{
-  ["furnace"] = true,
-  ["assembling-machine"] = true
-}
-
-local mine_entity = function(inventory, target)
-
-  if crafting_types[target.type] then
-    target.crafting_progress = 0
-  end
-
-  take_all_content(inventory, target)
-  if not (target and target.valid) then
-    --Items on ground die when you remove the items...
-    return true
-  end
-  if target.has_items_inside() then
-    --target.surface.create_entity{name = "flying-text", position = target.position, text = "Items inside?"}
-  --print("Tried to take all the target items, but he still has some, ergo, we cant fit that many items.")
-    return
-  end
-
-  --[[
-
-    if not inventory.is_empty() then
-      --Decided they only carry 1 stack now...
-      return
-    end
-    ]]
-
-    local prototype = target.prototype
-    local position = target.position
-    local surface = target.surface
-
-    local products = prototype.mineable_properties.products
-
-    if products then
-      if products[1] and not inventory.can_insert(products[1]) then
-        --We can't insert even 1 of the result products
-        return
-      end
-    end
-
-  local destroyed = target.destroy(destroy_param)
-
-  if not destroyed then
-  --print("He is still alive after destroying him, tough guy.")
-    return false
-  end
-
-  for k, remains_prototype in pairs (prototype.remains_when_mined) do
-    surface.create_entity{name = remains_prototype.name, position = position, force = "neutral"}
-  end
-
-  take_product_stacks(inventory, products)
-  return true
-end
-
-local transfer_item = function(source, destination, name)
-  local insert = destination.insert
-  local find = source.find_item_stack
-  while true do
-    stack = find(name)
-    if stack then
-      local count = stack.count
-      local taken = insert(stack)
-      if taken >= count then
-        stack.clear()
-      else
-        stack.count = count - taken
-        return
-      end
-    else
-      return
-    end
-  end
-end
 
 local make_path_request = function(drone_data, player, target)
   local prototype = get_prototype(names.units.construction_drone)
@@ -1711,7 +1600,12 @@ local process_deconstruct_command = function(drone_data)
     }
   end
 
-  local mined = mine_entity(drone_inventory, target)
+  local mined = target.mine
+  {
+    inventory = drone_inventory,
+    force = false,
+    raise_destroyed = true
+  }
   data.already_targeted[index] = nil
 
   if mined then
