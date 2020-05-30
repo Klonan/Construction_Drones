@@ -957,6 +957,7 @@ local ignored_types =
   "sticker",
   "speech-bubble"
 }
+
 local scan_for_nearby_jobs = function(player, area)
   --game.print(serpent.line(area))
   --player.surface.create_entity{name = "tutorial-flying-text", position = {area[1][1], area[1][2]}, text = "["}
@@ -1076,7 +1077,7 @@ local search_refresh = nil
 local setup_search_offsets = function(div)
   local r = 60 / div
 
-  data.search_queue = {}
+  search_offsets = {}
 
   for y = -div, div - 1 do
     for x = -div, div - 1 do
@@ -1084,6 +1085,7 @@ local setup_search_offsets = function(div)
       table.insert(search_offsets, area)
     end
   end
+
   table.sort(search_offsets, function(a, b) return distance(a[1], {0,0}) < distance(b[1], {0,0}) end)
   search_refresh = #search_offsets
 end

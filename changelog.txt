@@ -1,4 +1,10 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.3
+Date: 2020-05-30
+  Changes:
+    - Added a setting for the job search area subdivisioning (Credit to Baughn).
+    - Fix error due to 'drone_wait' being out of scope.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.2
 Date: 2020-05-28
   Changes:
