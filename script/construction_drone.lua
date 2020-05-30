@@ -32,8 +32,6 @@ local proxy_type = "item-request-proxy"
 local tile_deconstruction_proxy = "deconstructible-tile-proxy"
 local cliff_type = "cliff"
 
-local priority_checks_per_tick = 2
-local max_checks_per_tick = 1
 
 local drone_pathfind_flags =
 {
@@ -71,7 +69,6 @@ local data =
   job_queue = {},
   already_targeted = {},
   search_queue = {}
-
 }
 
 local prototype_cache = {}
@@ -1073,22 +1070,23 @@ local check_player_jobs = function(player)
 
 end
 
-
-
-local div = 5
-local r = 60 / div
 local search_offsets = {}
+local search_refresh = nil
 
-for y = -div, div - 1 do
-  for x = -div, div - 1 do
-    local area = {{x * r, y * r}, {(x + 1) * r, (y + 1) * r}}
-    table.insert(search_offsets, area)
+local setup_search_offsets = function(div)
+  local r = 60 / div
+
+  data.search_queue = {}
+
+  for y = -div, div - 1 do
+    for x = -div, div - 1 do
+      local area = {{x * r, y * r}, {(x + 1) * r, (y + 1) * r}}
+      table.insert(search_offsets, area)
+    end
   end
+  table.sort(search_offsets, function(a, b) return distance(a[1], {0,0}) < distance(b[1], {0,0}) end)
+  search_refresh = #search_offsets
 end
-
-table.sort(search_offsets, function(a, b) return distance(a[1], {0,0}) < distance(b[1], {0,0}) end)
-
-local search_refresh = #search_offsets
 
 local check_search_queue = function()
   local index, search_data = next(data.search_queue)
@@ -2249,7 +2247,10 @@ local on_lua_shortcut = function(event)
   end
 
   player.set_shortcut_toggled("construction-drone-toggle", true)
+end
 
+local on_runtime_mod_setting_changed = function()
+  setup_search_offsets(settings.global["throttling"].value)
 end
 
 local lib = {}
@@ -2274,11 +2275,15 @@ lib.events =
 
   [defines.events.on_script_path_request_finished] = on_script_path_request_finished,
   [defines.events.on_lua_shortcut] = on_lua_shortcut,
+
+  [defines.events.on_runtime_mod_setting_changed] = on_runtime_mod_setting_changed,
 }
 
 lib.on_load = function()
   data = global.construction_drone or data
   global.construction_drone = data
+
+  on_runtime_mod_setting_changed()
 end
 
 lib.on_init = function()
@@ -2291,6 +2296,7 @@ lib.on_init = function()
     player.set_shortcut_toggled("construction-drone-toggle", true)
   end
 
+  on_runtime_mod_setting_changed()
 end
 
 lib.on_configuration_changed = function()
