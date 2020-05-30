@@ -538,6 +538,18 @@ local find_a_player = function(drone_data)
   end
 end
 
+local drone_wait = function(drone_data, ticks)
+  local drone = drone_data.entity
+  if not (drone and drone.valid) then return end
+  drone.set_command
+  {
+    type = defines.command.stop,
+    ticks_to_wait = ticks,
+    distraction = defines.distraction.none,
+    radius = get_radius(drone)
+  }
+end
+
 local set_drone_idle = function(drone)
   if not (drone and drone.valid) then return end
 --print("Setting drone idle")
@@ -1149,18 +1161,6 @@ local clear_extra_targets = function(drone_data)
     end
   end
 
-end
-
-local drone_wait = function(drone_data, ticks)
-  local drone = drone_data.entity
-  if not (drone and drone.valid) then return end
-  drone.set_command
-  {
-    type = defines.command.stop,
-    ticks_to_wait = ticks,
-    distraction = defines.distraction.none,
-    radius = get_radius(drone)
-  }
 end
 
 local clear_target = function(drone_data)
