@@ -2236,19 +2236,18 @@ local on_script_path_request_finished = function(event)
 
 end
 
+local on_construction_drone_toggle = function(event)
+  local player = game.players[event.player_index]
+  local enabled = not player.is_shortcut_toggled("construction-drone-toggle")
+  player.set_shortcut_toggled("construction-drone-toggle", enabled)
+  if not enabled then
+    data.job_queue[event.player_index] = nil
+  end
+end
 
 local on_lua_shortcut = function(event)
   if event.prototype_name ~= "construction-drone-toggle" then return end
-  local player = game.get_player(event.player_index)
-
-  local enabled = player.is_shortcut_toggled("construction-drone-toggle")
-  if enabled then
-    player.set_shortcut_toggled("construction-drone-toggle", false)
-    data.job_queue[player.index] = nil
-    return
-  end
-
-  player.set_shortcut_toggled("construction-drone-toggle", true)
+  on_construction_drone_toggle(event)
 end
 
 local on_runtime_mod_setting_changed = function()
@@ -2277,6 +2276,7 @@ lib.events =
 
   [defines.events.on_script_path_request_finished] = on_script_path_request_finished,
   [defines.events.on_lua_shortcut] = on_lua_shortcut,
+  ["construction-drone-toggle"] = on_construction_drone_toggle,
 
   [defines.events.on_runtime_mod_setting_changed] = on_runtime_mod_setting_changed,
 }
