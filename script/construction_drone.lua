@@ -2253,8 +2253,6 @@ local on_runtime_mod_setting_changed = function()
   setup_search_offsets(settings.global["throttling"].value)
 end
 
-on_runtime_mod_setting_changed()
-
 local lib = {}
 
 lib.events =
@@ -2284,6 +2282,8 @@ lib.events =
 lib.on_load = function()
   data = global.construction_drone or data
   global.construction_drone = data
+
+  on_runtime_mod_setting_changed()
 end
 
 lib.on_init = function()
@@ -2296,6 +2296,7 @@ lib.on_init = function()
     player.set_shortcut_toggled("construction-drone-toggle", true)
   end
 
+  on_runtime_mod_setting_changed()
 end
 
 lib.on_configuration_changed = function()
