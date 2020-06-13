@@ -276,6 +276,7 @@ local belt_connectible_type =
   ["underground-belt"] = 4,
   ["splitter"] = 8,
   ["loader"] = 2,
+  ["loader-1x1"] = 2,
 }
 
 local transport_lines = function(entity)
@@ -1707,7 +1708,7 @@ local process_upgrade_command = function(drone_data)
   local entity_type = target.type
   local index = unique_index(target)
   local neighbour = entity_type == "underground-belt" and target.neighbours
-  local type = entity_type == "underground-belt" and target.belt_to_ground_type or entity_type == "loader" and target.loader_type
+  local type = entity_type == "underground-belt" and target.belt_to_ground_type or (entity_type == "loader" or entity_type == "loader-1x1") and target.loader_type
   local position = target.position
 
   surface.create_entity
