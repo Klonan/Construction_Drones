@@ -1,13 +1,13 @@
 {
   "name": "Construction_Drones",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "title": "Construction Drones",
   "author": "Klonan",
   "contact": "",
   "homepage": "",
   "description": "Adds ground based construction robots",
   "dependencies": [
-    "base >= 0.18.28",
+    "base >= 0.18.31",
     "(?) Hovercraft",
     "(?) walls-block-spitters"
   ],

@@ -494,7 +494,14 @@ local make_player_drone = function(player)
   local removed = player.remove_item({name = names.units.construction_drone, count = 1})
   if removed == 0 then return end
 
-  local drone = player.surface.create_entity{name = names.units.construction_drone, position = position, force = player.force}
+  local drone = player.surface.create_entity
+  {
+    name = names.units.construction_drone,
+    position = position,
+    force = player.force
+  }
+
+  script.register_on_entity_destroyed(drone)
 
   return drone
 end
@@ -619,36 +626,6 @@ local check_ghost = function(entity, player)
   }
 
   make_path_request(drone_data, player, target)
-end
-
-local on_built_entity = function(event)
-  local entity = event.created_entity or event.ghost or event.entity
-  if not (entity and entity.valid) then return end
-
-  local entity_type = entity.type
-
-  if entity_type == ghost_type then
-    data.ghosts_to_be_checked[entity.unit_number] = entity
-    --game.print(entity.unit_number)
-    return
-  end
-
-  if entity_type == tile_ghost_type then
-    data.tiles_to_be_checked[entity.unit_number] = entity
-    return
-  end
-
-  if entity_type == "character" then
-    add_character(entity)
-  end
-
-  local proxies = entity.surface.find_entities_filtered{position = entity.position, type = proxy_type}
-  for k, proxy in pairs (proxies) do
-    if proxy.proxy_target == entity then
-      insert(data.proxies_to_be_checked, proxy)
-    end
-  end
-
 end
 
 local check_upgrade = function(entity, player)
@@ -2117,32 +2094,35 @@ local on_ai_command_completed = function(event)
 end
 
 local on_entity_removed = function(event)
-  local entity = event.entity or event.ghost
---print("On removed event fired: "..entity.name.." - "..game.tick)
-  if not (entity and entity.valid) then return end
-  local unit_number = entity.unit_number
+
+  local unit_number
+  local entity = event.entity
+  if entity and entity.valid then
+    unit_number = entity.unit_number
+  else
+    unit_number = event.unit_number
+  end
+
   if not unit_number then return end
 
-  if is_commandable(entity.name) then
-    local drone_data = data.drone_commands[unit_number]
-    if drone_data then
-      cancel_drone_order(drone_data, true)
-    end
-    local proxy_chest = data.proxy_chests[unit_number]
-    if proxy_chest and proxy_chest.valid then
-    --print("Giving inventory buffer from proxy")
-      local buffer = event.buffer
-      if buffer and buffer.valid then
-        local inventory = proxy_chest.get_inventory(defines.inventory.chest)
-        if inventory and inventory.valid then
-          for name, count in pairs (inventory.get_contents()) do
-            buffer.insert{name = name, count = count}
-          end
+  local drone_data = data.drone_commands[unit_number]
+  if drone_data then
+    cancel_drone_order(drone_data, true)
+  end
+
+  local proxy_chest = data.proxy_chests[unit_number]
+  if proxy_chest and proxy_chest.valid then
+  --print("Giving inventory buffer from proxy")
+    local buffer = event.buffer
+    if buffer and buffer.valid then
+      local inventory = proxy_chest.get_inventory(defines.inventory.chest)
+      if inventory and inventory.valid then
+        for name, count in pairs (inventory.get_contents()) do
+          buffer.insert{name = name, count = count}
         end
       end
-      proxy_chest.destroy()
     end
-    return
+    proxy_chest.destroy()
   end
 
 end
@@ -2171,22 +2151,6 @@ local on_entity_cloned = function(event)
     set_drone_order(destination, new_data)
     return
   end
-
-  if destination.to_be_deconstructed() then
-    data.deconstructs_to_be_checked_again[unique_index(destination)] = {entity = destination, force = destination.force}
-    data.sent_deconstruction[unique_index(destination)] = 0
-  end
-
-  if destination.to_be_upgraded() then
-    data.upgrade_to_be_checked[destination.unit_number] = destination
-  end
-
-  if destination.type == proxy_type then
-    insert(data.proxies_to_be_checked, destination)
-  end
-
-  on_built_entity{created_entity = destination}
-
 
 end
 
@@ -2261,14 +2225,11 @@ lib.events =
 {
   [defines.events.on_tick] = on_tick,
 
-  --[defines.events.on_built_entity] = on_built_entity,
-  --[defines.events.on_post_entity_died] = on_built_entity,
-  --[defines.events.script_raised_built] = on_built_entity,
-
   [defines.events.on_entity_died] = on_entity_removed,
   [defines.events.on_robot_mined_entity] = on_entity_removed,
   [defines.events.on_player_mined_entity] = on_entity_removed,
   [defines.events.on_pre_ghost_deconstructed] = on_entity_removed,
+  [defines.events.on_entity_destroyed] = on_entity_removed,
 
   [defines.events.on_player_created] = on_player_created,
 
