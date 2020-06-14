@@ -26,4 +26,4 @@ end
 
 
 local name = names.units.construction_drone
-data.raw.unit[name].collision_mask = {"not-colliding-with-itself", "doodad-layer", "item-layer"}
+data.raw.unit[name].collision_mask = {"not-colliding-with-itself", "doodad-layer", "item-layer", "consider-tile-transitions"}

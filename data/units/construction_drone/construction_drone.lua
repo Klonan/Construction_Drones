@@ -44,7 +44,7 @@ local unit = {
   max_health = 45,
   order = "b-b-a",
   subgroup="logistic-network",
-  has_belt_immunity = false,
+  has_belt_immunity = true,
   can_open_gates = true,
   affected_by_tiles = true,
   collision_box = {{-0.01, -0.01}, {0.01, 0.01}},
@@ -144,7 +144,7 @@ local unit = {
       color = {r=1.0, g=1.0, b=1.0}
     }
   },
-  resistances = 
+  resistances =
   {
     {
       type = "acid",

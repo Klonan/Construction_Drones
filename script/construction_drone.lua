@@ -470,6 +470,7 @@ local get_build_item = function(prototype, player)
   local items = prototype.items_to_place_this
   for k, item in pairs(items) do
     if player.get_item_count(item.name) >= item.count or player.cheat_mode then
+      game.print(prototype.name.. " - "..item.name)
       return item
     end
   end
@@ -605,13 +606,15 @@ local check_ghost = function(entity, player)
     local unit_number = ghost.unit_number
     local should_check = not data.already_targeted[unit_number]
     if should_check then
-      data.already_targeted[unit_number] = true
-      extra_targets[unit_number] = ghost
-      count = count + 1
+      if ghost.ghost_name == entity.ghost_name then
+        data.already_targeted[unit_number] = true
+        extra_targets[unit_number] = ghost
+        count = count + 1
+      end
     end
   end
 
-  item.count = count
+  item.count = item.count * count
 
   local target = surface.get_closest(player.position, extra_targets)
   extra_targets[target.unit_number] = nil
