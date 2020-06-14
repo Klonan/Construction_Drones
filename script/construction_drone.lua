@@ -470,7 +470,6 @@ local get_build_item = function(prototype, player)
   local items = prototype.items_to_place_this
   for k, item in pairs(items) do
     if player.get_item_count(item.name) >= item.count or player.cheat_mode then
-      game.print(prototype.name.. " - "..item.name)
       return item
     end
   end
