@@ -1515,7 +1515,7 @@ local process_failed_command = function(drone_data)
 
   local modifier = drone.ai_settings.path_resolution_modifier
 
-  if modifier <= 3 then
+  if modifier <= 2 then
     drone.ai_settings.path_resolution_modifier = modifier + 1
     return drone_wait(drone_data, 107)
   end
@@ -2019,7 +2019,7 @@ process_return_to_player_command = function(drone_data, force)
 
 end
 
-
+local max = math.max
 process_drone_command = function(drone_data, result)
 
   local drone = drone_data.entity
@@ -2028,7 +2028,7 @@ process_drone_command = function(drone_data, result)
   end
 
   if drone_data.player and drone_data.player.valid and drone_data.player.character then
-    drone.speed = drone_data.player.character_running_speed * 1.2
+    drone.speed = max(drone_data.player.character_running_speed * 1.2, 0.2)
   else
     drone.speed = 1
   end
