@@ -5,6 +5,7 @@ Date: ????
     - Fix drones couldn't walk over open gates.
     - Fix drones being real slow if you use a jetpack.
     - Attempt to reduce UPS usage when jetpacking from trapped drones.
+    - Fix drones losing tile items when building over tiles.
 ---------------------------------------------------------------------------------------------------
 Version: 0.6.6
 Date: 2020-06-14

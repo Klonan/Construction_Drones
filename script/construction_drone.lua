@@ -1470,6 +1470,14 @@ local process_construct_command = function(drone_data)
   local drone = drone_data.entity
   local position = target.position
 
+  local tile_products
+  if target.type == "tile-ghost" then
+    local tile = target.surface.get_tile(target.position)
+    if tile then
+      tile_products = tile.prototype.mineable_properties.products
+    end
+  end
+
   local index = unique_index(target)
   local success, entity, proxy = target.revive(revive_param)
   if not success then
@@ -1486,8 +1494,14 @@ local process_construct_command = function(drone_data)
   end
   data.already_targeted[index] = nil
 
-
   drone_inventory.remove{name = drone_data.item_used_to_place, count = 1}
+
+  if tile_products then
+    for k, product in pairs(tile_products) do
+      drone_inventory.insert(stack_from_product(product))
+    end
+  end
+
   update_drone_sticker(drone_data)
 
   drone_data.target = get_extra_target(drone_data)
@@ -1851,72 +1865,6 @@ local process_request_proxy_command = function(drone_data)
 
   update_drone_sticker(drone_data)
 
-  return drone_wait(drone_data, build_time)
-end
-
-local process_construct_tile_command = function(drone_data)
---print("Processing construct tile command")
-  local target = drone_data.target
-  if not (target and target.valid) then
-    return cancel_drone_order(drone_data)
-  end
-
-  local drone_inventory = get_drone_inventory(drone_data)
-  if drone_inventory.get_item_count(drone_data.item_used_to_place) == 0 then
-    return cancel_drone_order(drone_data)
-  end
-
-  local drone = drone_data.entity
-
-  if not move_to_order_target(drone_data, target, ranges.interact) then
-    return
-  end
-
-  local position = target.position
-  local surface = target.surface
-
-  local tile = surface.get_tile(position.x, position.y)
-  local current_prototype = tile.prototype
-  local products = current_prototype.mineable_properties.products
-  local target_tile_name = target.ghost_name
-
-  surface.set_tiles({{name = target_tile_name, position = position}}, true, false, false, true)
-
-  if surface.get_tile(position).name ~= current_prototype.name then
-    --was successful
-    local drone_inventory = get_drone_inventory(drone_data)
-    drone_inventory.remove({name = drone_data.item_used_to_place, count = 1})
-
-    local insert = drone_inventory.insert
-    if products then
-      for k, product in pairs (products) do
-        local stack = stack_from_product(product)
-        if stack then
-          insert(stack)
-        end
-      end
-      drone_data.dropoff = {}
-    end
-  end
-
-  update_drone_sticker(drone_data)
-  local drone = drone_data.entity
-
-  drone_data.target = get_extra_target(drone_data)
-
-  local build_time = get_build_time(drone_data)
-  local orientation, offset = get_beam_orientation(drone.position, position)
-  drone.orientation = orientation
-  drone.surface.create_entity
-  {
-    name = beams.build,
-    source = drone,
-    target_position = position,
-    position = drone.position,
-    force = drone.force,
-    duration = build_time - 5,
-    source_offset = offset
-  }
   return drone_wait(drone_data, build_time)
 end
 
