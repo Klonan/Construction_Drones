@@ -19,6 +19,8 @@ end
 
 for k, rail in pairs (data.raw["curved-rail"]) do
   rail.collision_mask = rail.collision_mask or {"water-tile", "floor-layer", "item-layer"}
+  remove_from_list(rail.collision_mask, "item-layer")
+  remove_from_list(rail.collision_mask, "floor-layer")
   table.insert(rail.collision_mask, "floor-layer")
 end
 
