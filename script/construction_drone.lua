@@ -437,7 +437,7 @@ local make_path_request = function(drone_data, player, target)
     goal = target.position,
     force = player.force,
     radius = target.get_radius() + 4,
-    pathfind_flags = {},
+    pathfind_flags = drone_pathfind_flags,
     can_open_gates = true,
     path_resolution_modifier = 0,
   }
