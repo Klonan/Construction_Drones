@@ -1215,7 +1215,7 @@ local move_to_order_target = function(drone_data, target, range)
   {
     type = defines.command.go_to_location,
     destination_entity = target,
-    radius = (target == drone_data.character and 1) or (get_radius(drone, range) + get_radius(target)),
+    radius = ((target == drone_data.character and 0.15) or (get_radius(drone, range) + get_radius(target))) - 1,
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }
@@ -1240,7 +1240,7 @@ local move_to_player = function(drone_data, player, range)
     type = defines.command.go_to_location,
     destination_entity = player.character or nil,
     destination = (not player.character and player.position) or nil,
-    radius = 1,
+    radius = 0.25,
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }

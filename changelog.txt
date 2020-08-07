@@ -1,8 +1,9 @@
 ---------------------------------------------------------------------------------------------------
 Version: 0.6.9
-Date: 2020-07-19
+Date: 2020-08-07
   Changes:
     - Attempt to improve drone responsiveness due to path requests taking a long time to execute.
+    - Fix drones getting stuck.
 ---------------------------------------------------------------------------------------------------
 Version: 0.6.8
 Date: 2020-07-06
