@@ -1236,8 +1236,13 @@ local move_to_player = function(drone_data, player, range)
     return
   end
 
-  if distance(drone.position, player.position) < 1 then
+  if
+    (drone_data.mtp_prev_pos ~= nil and distance(drone.position,  drone_data.mtp_prev_pos) <= 0.01) or
+    distance(drone.position, player.position) < 1
+  then
     return true
+  else
+    drone_data.mtp_prev_pos = drone.position
   end
 
   drone.set_command
