@@ -1202,14 +1202,10 @@ local move_to_order_target = function(drone_data, target)
     return
   end
 
-<<<<<<< HEAD
-  if in_construction_range(drone, target) then
-=======
   if
     (drone_data.mtot_prev_pos ~= nil and distance(drone.position,  drone_data.mtot_prev_pos) <= 0.01) or
-    in_construction_range(drone, target, range)
+    in_construction_range(drone, target)
   then
->>>>>>> e4211a4... Temporary fix for #19
     return true
   else
     drone_data.mtot_prev_pos = drone.position
@@ -1235,8 +1231,13 @@ local move_to_player = function(drone_data, player)
     return
   end
 
-  if distance(drone.position, player.position) < 2 then
+  if
+    (drone_data.mtp_prev_pos ~= nil and distance(drone.position,  drone_data.mtp_prev_pos) <= 0.01) or
+    distance(drone.position, player.position) < 2
+  then
     return true
+  else
+    drone_data.mtp_prev_pos = drone.position
   end
 
   drone.set_command
