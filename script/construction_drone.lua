@@ -1220,7 +1220,7 @@ local move_to_order_target = function(drone_data, target, range)
   {
     type = defines.command.go_to_location,
     destination_entity = target,
-    radius = ((target == drone_data.character and 0.15) or get_radius(drone, range)) - 1,
+    radius = ((target == drone_data.character and 0.15) or get_radius(drone, range)),
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }
