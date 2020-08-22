@@ -1,4 +1,11 @@
 ---------------------------------------------------------------------------------------------------
+Version: 0.6.11
+Date: 2020-08-22
+  Changes:
+    - Fixes to building big things.
+    - Fixes to returning to player.
+    - Fix error when trying to descontruct enemy things.
+---------------------------------------------------------------------------------------------------
 Version: 0.6.10
 Date: 2020-08-08
   Changes:

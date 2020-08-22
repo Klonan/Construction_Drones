@@ -12,7 +12,7 @@ drone_prototypes =
 {
   [names.units.construction_drone] =
   {
-    interact_range = 4,
+    interact_range = 5,
     return_to_character_range = -1
   },
 }
@@ -150,7 +150,7 @@ local ranges =
   return_to_character = 3
 }
 
-local get_radius = function(entity, range)
+local get_radius = function(entity, range, goto_entity)
   local radius
   local type = entity.type
   if type == ghost_type then
@@ -167,6 +167,8 @@ local get_radius = function(entity, range)
     else
       radius = get_radius_map()[entity.name]
     end
+  elseif goto_entity then
+    return 0
   else
     radius = get_radius_map()[entity.name]
   end
@@ -185,16 +187,9 @@ local distance = function(position_1, position_2)
   return (((x2 - x1) * (x2 - x1)) + ((y2 - y1) * (y2 - y1))) ^ 0.5
 end
 
-local in_range = function(entity_1, entity_2, extra)
-
-  local distance = distance(entity_1.position, entity_2.position)
-  return distance <= (get_radius(entity_1) + (get_radius(entity_2))) + (extra or 2)
-
-end
-
-local in_construction_range = function(drone, target, range)
-  local distance =  distance(drone.position, target.position)
-  return distance <= (get_radius(drone, range) + (get_radius(target)))
+local in_construction_range = function(drone, target)
+  local distance =  distance(drone.position, target.position) - 2
+  return distance <= ((get_radius(drone, ranges.interact) + (get_radius(target))))
 end
 
 local floor = math.floor
@@ -757,7 +752,7 @@ local check_deconstruction = function(entity, player)
 
   local force = player.force
 
-  if not (entity.force == force or entity.force.name == "neutral" or entity.force.is_friend(force)) then
+  if not (entity.force == force or entity.force.name == "neutral" or entity.force.get_friend(force)) then
     return
   end
 
@@ -1198,7 +1193,7 @@ end
 
 local floor = math.floor
 
-local move_to_order_target = function(drone_data, target, range)
+local move_to_order_target = function(drone_data, target)
 
   local drone = drone_data.entity
 
@@ -1207,7 +1202,7 @@ local move_to_order_target = function(drone_data, target, range)
     return
   end
 
-  if in_construction_range(drone, target, range) then
+  if in_construction_range(drone, target) then
     return true
   end
 
@@ -1215,14 +1210,14 @@ local move_to_order_target = function(drone_data, target, range)
   {
     type = defines.command.go_to_location,
     destination_entity = target,
-    radius = ((target == drone_data.character and 0.15) or get_radius(drone, range)) - 1,
+    radius = ((target == drone_data.character and 0) or get_radius(drone, ranges.interact)) + get_radius(target, nil, true),
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }
 
 end
 
-local move_to_player = function(drone_data, player, range)
+local move_to_player = function(drone_data, player)
 
   local drone = drone_data.entity
 
@@ -1231,7 +1226,7 @@ local move_to_player = function(drone_data, player, range)
     return
   end
 
-  if distance(drone.position, player.position) < 1 then
+  if distance(drone.position, player.position) < 2 then
     return true
   end
 
@@ -1240,7 +1235,7 @@ local move_to_player = function(drone_data, player, range)
     type = defines.command.go_to_location,
     destination_entity = player.character or nil,
     destination = (not player.character and player.position) or nil,
-    radius = 0.25,
+    radius = 0,
     distraction = defines.distraction.none,
     pathfind_flags = drone_pathfind_flags
   }
@@ -1345,7 +1340,7 @@ local process_pickup_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
-  if not move_to_player(drone_data, player, ranges.interact) then
+  if not move_to_player(drone_data, player) then
     return
   end
 
@@ -1463,7 +1458,7 @@ local process_construct_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
-  if not move_to_order_target(drone_data, target, ranges.interact) then
+  if not move_to_order_target(drone_data, target) then
     return
   end
 
@@ -1553,7 +1548,7 @@ local process_deconstruct_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
-  if not move_to_order_target(drone_data, target, ranges.interact) then
+  if not move_to_order_target(drone_data, target) then
     return
   end
 
@@ -1642,7 +1637,7 @@ local process_repair_command = function(drone_data)
   end
 
 
-  if not move_to_order_target(drone_data, target, ranges.interact) then
+  if not move_to_order_target(drone_data, target) then
     return
   end
 
@@ -1714,7 +1709,7 @@ local process_upgrade_command = function(drone_data)
 
   local drone = drone_data.entity
 
-  if not move_to_order_target(drone_data, target, ranges.interact) then
+  if not move_to_order_target(drone_data, target) then
     return
   end
 
@@ -1823,7 +1818,7 @@ local process_request_proxy_command = function(drone_data)
     return cancel_drone_order(drone_data)
   end
 
-  if not move_to_order_target(drone_data, proxy_target, ranges.interact) then
+  if not move_to_order_target(drone_data, proxy_target) then
     return
   end
 
@@ -1879,7 +1874,7 @@ local process_deconstruct_cliff_command = function(drone_data)
 
   local drone = drone_data.entity
 
-  if not move_to_order_target(drone_data, target, ranges.interact) then
+  if not move_to_order_target(drone_data, target) then
     return
   end
 
@@ -1935,7 +1930,7 @@ process_return_to_player_command = function(drone_data, force)
     return cancel_drone_order(drone_data)
   end
 
-  if not (force or move_to_player(drone_data, player, ranges.return_to_character)) then
+  if not (force or move_to_player(drone_data, player)) then
     return
   end
 
