@@ -3,4 +3,5 @@ names = require("shared")
 --require "data/hotkeys"
 require "data/units/units"
 require "data/entities/entities"
+require "data/hotkeys"
 require "data/shortcut"

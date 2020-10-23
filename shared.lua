@@ -2,11 +2,6 @@
 
 local data = {}
 
-data.hotkeys =
-{
-  shoo = "Shoo!"
-}
-
 data.units =
 {
   construction_drone = "Construction Drone",

@@ -14,6 +14,7 @@ data:extend(
     {
       type = "shortcut",
       name = "construction-drone-toggle",
+      associated_control_input = "construction-drone-toggle",
       localised_name = "Toggle Construction drones",
       order = "a[construction-drones]",
       action = "lua",
