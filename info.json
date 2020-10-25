@@ -1,15 +1,15 @@
 {
   "name": "Construction_Drones",
-  "version": "0.6.11",
+  "version": "1.0.0",
   "title": "Construction Drones",
   "author": "Klonan",
   "contact": "",
   "homepage": "",
   "description": "Adds ground based construction robots",
   "dependencies": [
-    "base >= 1.0.0",
+    "base >= 1.1.0",
     "(?) Hovercraft",
     "(?) walls-block-spitters"
   ],
-  "factorio_version": "1.0"
+  "factorio_version": "1.1"
 }
