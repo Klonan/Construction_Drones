@@ -1,35 +1,16 @@
 util = require "data/tf_util/tf_util"
 names = require("shared")
+local collision_mask_util = require("collision-mask-util")
 
-local remove_from_list = function(list, value)
-  for k, v in pairs (list) do
-    if v == value then
-      table.remove(list, k)
-      return
-    end
+local drone_collision_mask = collision_mask_util.get_first_unused_layer()
+
+for k, prototype in pairs (collision_mask_util.collect_prototypes_with_layer("player-layer")) do
+  local mask = collision_mask_util.get_mask(prototype)
+  if collision_mask_util.mask_contains_layer(mask, "item-layer") then
+    collision_mask_util.add_layer(mask, drone_collision_mask)
   end
-end
-
-local drone_collision_mask = "item-layer"
-
-for k, rail in pairs (data.raw["straight-rail"]) do
-  rail.collision_mask = rail.collision_mask or {"water-tile", "floor-layer", "item-layer", "rail-layer"}
-  remove_from_list(rail.collision_mask, drone_collision_mask)
-  remove_from_list(rail.collision_mask, "rail-layer")
-  table.insert(rail.collision_mask, "rail-layer")
-end
-
-for k, rail in pairs (data.raw["curved-rail"]) do
-  rail.collision_mask = rail.collision_mask or {"water-tile", "floor-layer", "item-layer", "rail-layer"}
-  remove_from_list(rail.collision_mask, drone_collision_mask)
-  remove_from_list(rail.collision_mask, "rail-layer")
-  table.insert(rail.collision_mask, "rail-layer")
-end
-
-for k, gate in pairs (data.raw.gate) do
-  gate.opened_collision_mask = gate.opened_collision_mask or {"object-layer", "item-layer", "floor-layer", "water-tile"}
-  remove_from_list(gate.opened_collision_mask, drone_collision_mask)
+  prototype.collision_mask = mask
 end
 
 local name = names.units.construction_drone
-data.raw.unit[name].collision_mask = {"not-colliding-with-itself", "doodad-layer", drone_collision_mask, "consider-tile-transitions"}
+data.raw.unit[name].collision_mask = {"not-colliding-with-itself", drone_collision_mask, "consider-tile-transitions"}
