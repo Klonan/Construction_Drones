@@ -607,7 +607,8 @@ local check_ghost = function(entity, player)
       end
     end
   end
-
+  
+  local origCount = item.count
   item.count = item.count * count
 
   local target = surface.get_closest(player.position, extra_targets)
@@ -619,7 +620,9 @@ local check_ghost = function(entity, player)
     order = drone_orders.construct,
     pickup = {stack = item},
     target = target,
+    entity_ghost_name = entity.ghost_name,
     item_used_to_place = item.name,
+    item_used_to_place_count = origCount,
     extra_targets = extra_targets
   }
 
@@ -1449,13 +1452,17 @@ local revive_param = {return_item_request_proxy = true, raise_revive = true}
 local process_construct_command = function(drone_data)
 --print("Processing construct command")
   local target = drone_data.target
-  if not (target and target.valid) then
+  if not (target and target.valid and drone_data.item_used_to_place_count) then
     return cancel_drone_order(drone_data)
   end
 
   local drone_inventory = get_drone_inventory(drone_data)
-  if drone_inventory.get_item_count(drone_data.item_used_to_place) == 0 then
+  if drone_inventory.get_item_count(drone_data.item_used_to_place) < drone_data.item_used_to_place_count then
     return cancel_drone_order(drone_data)
+  end
+
+  if target.ghost_name ~= drone_data.entity_ghost_name then
+    return cancel_drone_order(drone_data) --entity got upgraded?
   end
 
   if not move_to_order_target(drone_data, target) then
@@ -1464,6 +1471,8 @@ local process_construct_command = function(drone_data)
 
   local drone = drone_data.entity
   local position = target.position
+  local force = target.force
+  local surface = target.surface
 
   local tile_products
   if target.type == "tile-ghost" then
@@ -1474,8 +1483,8 @@ local process_construct_command = function(drone_data)
   end
 
   local index = unique_index(target)
-  local success, entity, proxy = target.revive(revive_param)
-  if not success then
+  local colliding_items, entity, proxy = target.revive(revive_param)
+  if not colliding_items then
     if target.valid then
       drone_wait(drone_data, 30)
     --print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
@@ -1489,7 +1498,15 @@ local process_construct_command = function(drone_data)
   end
   data.already_targeted[index] = nil
 
-  drone_inventory.remove{name = drone_data.item_used_to_place, count = 1}
+  for name, count in pairs(colliding_items) do
+    local inserted = drone_inventory.insert{name = name, count = count}
+	      
+    if inserted < count then
+      surface.spill_item_stack(position, {name = name, count = count - inserted}, false, force)
+    end
+  end
+
+  drone_inventory.remove{name = drone_data.item_used_to_place, count = drone_data.item_used_to_place_count}
 
   if tile_products then
     for k, product in pairs(tile_products) do
@@ -1736,15 +1753,14 @@ local process_upgrade_command = function(drone_data)
 
   data.already_targeted[index] = nil
 
-  get_drone_inventory(drone_data).remove({name = drone_data.item_used_to_place})
+  drone_inventory.remove({name = drone_data.item_used_to_place})
 
   local drone_inventory = get_drone_inventory(drone_data)
   local products = get_prototype(original_name).mineable_properties.products
 
   take_product_stacks(drone_inventory, products)
-
-
-  if neighbour and neighbour.valid then
+  
+  if neighbour and neighbour.valid and drone_inventory.get_item_count(drone_data.item_used_to_place) > 0 then
   --print("Upgrading neighbour")
     local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
     local neighbour_index = unique_index(neighbour)
@@ -1761,6 +1777,7 @@ local process_upgrade_command = function(drone_data)
     }
     data.already_targeted[neighbour_index] = nil
     take_product_stacks(drone_inventory, products)
+    drone_inventory.remove({name = drone_data.item_used_to_place})
   end
 
   local target = get_extra_target(drone_data)
@@ -1826,7 +1843,17 @@ local process_request_proxy_command = function(drone_data)
 
   local stack_name = stack.name
   local position = target.position
-  local inserted = proxy_target.insert(stack)
+  local inserted = 0
+  local moduleInv = proxy_target.get_module_inventory()
+
+  if moduleInv then
+    inserted = moduleInv.insert(stack)
+  end
+
+  if not moduleInv or inserted == 0 then
+    inserted = proxy_target.insert(stack)
+  end
+
   if inserted == 0 then
   --print("Can't insert anything anyway, kill the proxy")
     target.destroy()
