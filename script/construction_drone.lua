@@ -620,6 +620,7 @@ local check_ghost = function(entity, player)
     order = drone_orders.construct,
     pickup = {stack = item},
     target = target,
+    entity_ghost_name = entity.ghost_name,
     item_used_to_place = item.name,
     item_used_to_place_count = origCount,
     extra_targets = extra_targets
@@ -1458,6 +1459,10 @@ local process_construct_command = function(drone_data)
   local drone_inventory = get_drone_inventory(drone_data)
   if drone_inventory.get_item_count(drone_data.item_used_to_place) < drone_data.item_used_to_place_count then
     return cancel_drone_order(drone_data)
+  end
+
+  if target.ghost_name ~= drone_data.entity_ghost_name then
+    return cancel_drone_order(drone_data) --entity got upgraded?
   end
 
   if not move_to_order_target(drone_data, target) then
