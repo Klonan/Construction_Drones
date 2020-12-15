@@ -1843,7 +1843,17 @@ local process_request_proxy_command = function(drone_data)
 
   local stack_name = stack.name
   local position = target.position
-  local inserted = proxy_target.insert(stack)
+  local inserted = 0
+  local moduleInv = proxy_target.get_module_inventory()
+
+  if moduleInv then
+    inserted = moduleInv.insert(stack)
+  end
+
+  if not moduleInv or inserted == 0 then
+    inserted = proxy_target.insert(stack)
+  end
+
   if inserted == 0 then
   --print("Can't insert anything anyway, kill the proxy")
     target.destroy()
