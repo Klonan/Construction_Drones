@@ -1738,15 +1738,14 @@ local process_upgrade_command = function(drone_data)
 
   data.already_targeted[index] = nil
 
-  get_drone_inventory(drone_data).remove({name = drone_data.item_used_to_place})
+  drone_inventory.remove({name = drone_data.item_used_to_place})
 
   local drone_inventory = get_drone_inventory(drone_data)
   local products = get_prototype(original_name).mineable_properties.products
 
   take_product_stacks(drone_inventory, products)
-
-
-  if neighbour and neighbour.valid then
+  
+  if neighbour and neighbour.valid and drone_inventory.get_item_count(drone_data.item_used_to_place) > 0 then
   --print("Upgrading neighbour")
     local type = neighbour.type == "underground-belt" and neighbour.belt_to_ground_type
     local neighbour_index = unique_index(neighbour)
@@ -1763,6 +1762,7 @@ local process_upgrade_command = function(drone_data)
     }
     data.already_targeted[neighbour_index] = nil
     take_product_stacks(drone_inventory, products)
+    drone_inventory.remove({name = drone_data.item_used_to_place})
   end
 
   local target = get_extra_target(drone_data)
