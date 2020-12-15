@@ -607,7 +607,8 @@ local check_ghost = function(entity, player)
       end
     end
   end
-
+  
+  local origCount = item.count
   item.count = item.count * count
 
   local target = surface.get_closest(player.position, extra_targets)
@@ -620,6 +621,7 @@ local check_ghost = function(entity, player)
     pickup = {stack = item},
     target = target,
     item_used_to_place = item.name,
+    item_used_to_place_count = origCount,
     extra_targets = extra_targets
   }
 
@@ -1454,7 +1456,7 @@ local process_construct_command = function(drone_data)
   end
 
   local drone_inventory = get_drone_inventory(drone_data)
-  if drone_inventory.get_item_count(drone_data.item_used_to_place) == 0 then
+  if drone_inventory.get_item_count(drone_data.item_used_to_place) < drone_data.item_used_to_place_count then
     return cancel_drone_order(drone_data)
   end
 
@@ -1489,7 +1491,7 @@ local process_construct_command = function(drone_data)
   end
   data.already_targeted[index] = nil
 
-  drone_inventory.remove{name = drone_data.item_used_to_place, count = 1}
+  drone_inventory.remove{name = drone_data.item_used_to_place, count = drone_data.item_used_to_place_count}
 
   if tile_products then
     for k, product in pairs(tile_products) do
