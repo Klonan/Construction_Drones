@@ -1471,6 +1471,8 @@ local process_construct_command = function(drone_data)
 
   local drone = drone_data.entity
   local position = target.position
+  local force = target.force
+  local surface = target.surface
 
   local tile_products
   if target.type == "tile-ghost" then
@@ -1481,8 +1483,8 @@ local process_construct_command = function(drone_data)
   end
 
   local index = unique_index(target)
-  local success, entity, proxy = target.revive(revive_param)
-  if not success then
+  local colliding_items, entity, proxy = target.revive(revive_param)
+  if not colliding_items then
     if target.valid then
       drone_wait(drone_data, 30)
     --print("Some idiot might be in the way too ("..drone.unit_number.." - "..game.tick..")")
@@ -1495,6 +1497,14 @@ local process_construct_command = function(drone_data)
     return
   end
   data.already_targeted[index] = nil
+
+  for name, count in pairs(colliding_items) do
+    local inserted = drone_inventory.insert{name = name, count = count}
+	      
+    if inserted < count then
+      surface.spill_item_stack(position, {name = name, count = count - inserted}, false, force)
+    end
+  end
 
   drone_inventory.remove{name = drone_data.item_used_to_place, count = drone_data.item_used_to_place_count}
 
