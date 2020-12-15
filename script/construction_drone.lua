@@ -1452,7 +1452,7 @@ local revive_param = {return_item_request_proxy = true, raise_revive = true}
 local process_construct_command = function(drone_data)
 --print("Processing construct command")
   local target = drone_data.target
-  if not (target and target.valid) then
+  if not (target and target.valid and drone_data.item_used_to_place_count) then
     return cancel_drone_order(drone_data)
   end
 
